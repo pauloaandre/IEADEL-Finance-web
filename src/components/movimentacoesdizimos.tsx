@@ -17,7 +17,7 @@ export interface Dizimo {
     idUsuario: number | null;
     nomeUsuario: string | null;
     idCongregacao: number;
-    dataRegistro: string;
+    dataRegistro: string | null;
 }
 
 interface MonthSelectorProps {
@@ -67,7 +67,8 @@ export default function Movimentacoes({
                     // Mapeia valor string para number conforme a interface Frontend
                     const parsedData = res.data.map(d => ({
                         ...d,
-                        valor: Number(d.valor)
+                        valor: Number(d.valor),
+                        descricao: d.descricao || ""
                     }));
                     setDizimos(parsedData);
                 }

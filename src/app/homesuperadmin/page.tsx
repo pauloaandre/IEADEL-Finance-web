@@ -83,7 +83,7 @@ export default function HomeSuperAdmin() {
   const handleCreateCongregacao = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await criarCongregacaoAction({ nome: newCongName });
+      const res = await criarCongregacaoAction({ nome: newCongName, endereco: null });
 
       if (res.success) {
         setNewCongName("");

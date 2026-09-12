@@ -17,7 +17,7 @@ export interface Oferta {
     idUsuario: number | null;
     nomeUsuario: string | null;
     idCongregacao: number;
-    dataRegistro: string;
+    dataRegistro: string | null;
 }
 interface MonthSelectorProps {
     initialMonth?: number;
@@ -63,7 +63,8 @@ export default function Movimentacoes({
                 if (res.success) {
                     const parsedData = res.data.map(d => ({
                         ...d,
-                        valor: Number(d.valor)
+                        valor: Number(d.valor),
+                        descricao: d.descricao || ""
                     }));
                     setOfertas(parsedData);
                 }
