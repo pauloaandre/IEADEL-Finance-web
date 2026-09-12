@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: ieadel-web
+    restart: always
+    ports:
+      - "80:3000" # Mapeia a porta 80 da VPS para a porta 3000 do container
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
