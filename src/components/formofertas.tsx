@@ -12,31 +12,38 @@ export default function OfertaModal({ onSuccess }: OfertaModalProps) {
   const [valor, setValor] = useState("");
   const [data, setData] = useState(hoje);
   const [descricao, setDescricao] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
-    const payload = {
-      descricao: descricao || "",
-      valor: Number(valor) || 0,
-      data,
-      tipo: "OFERTA" as const,
-      usuarioId: undefined,
-      isVisitante: true,
-    };
+    try {
+      const payload = {
+        descricao: descricao || "",
+        valor: Number(valor) || 0,
+        data,
+        tipo: "OFERTA" as const,
+        usuarioId: undefined,
+        isVisitante: true,
+      };
 
-    console.log("Oferta enviada:", payload);
+      console.log("Oferta enviada:", payload);
 
-    const res = await criarMovimentacaoAction(payload);
+      const res = await criarMovimentacaoAction(payload);
 
-    if (res.success) {
-        setValor("");
-        setData(hoje);
-        setDescricao("");
-        setIsOpen(false);
-        if (onSuccess) onSuccess();
-    } else {
-        alert("Erro ao salvar oferta: " + res.error);
+      if (res.success) {
+          setValor("");
+          setData(hoje);
+          setDescricao("");
+          setIsOpen(false);
+          if (onSuccess) onSuccess();
+      } else {
+          alert("Erro ao salvar oferta: " + res.error);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -90,9 +97,12 @@ export default function OfertaModal({ onSuccess }: OfertaModalProps) {
                 </button>
                 <button
                   type="submit"
-                  className="bg-green-600 text-white px-4 py-2 rounded cursor-pointer"
+                  disabled={isSubmitting}
+                  className={`text-white px-4 py-2 rounded cursor-pointer ${
+                    isSubmitting ? "bg-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
+                  }`}
                 >
-                  Salvar
+                  {isSubmitting ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </form>

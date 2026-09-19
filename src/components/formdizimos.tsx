@@ -17,6 +17,7 @@ export default function FormDizimos({ onSuccess }: DizimoModalProps) {
   const [valor, setValor] = useState("");
   const [data, setData] = useState(hoje);
   const [sugestoes, setSugestoes] = useState<Pessoa[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const valorInput = e.target.value;
@@ -45,29 +46,36 @@ export default function FormDizimos({ onSuccess }: DizimoModalProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const payload = {
-      descricao,
-      valor: Number(valor) || 0,
-      data,
-      tipo: "DIZIMO" as const,
-      isVisitante: id_usuario === null,
-      usuarioId: id_usuario ?? undefined,
-    };
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
-    console.log("Dízimo enviado:", payload);
+    try {
+      const payload = {
+        descricao,
+        valor: Number(valor) || 0,
+        data,
+        tipo: "DIZIMO" as const,
+        isVisitante: id_usuario === null,
+        usuarioId: id_usuario ?? undefined,
+      };
 
-    const res = await criarMovimentacaoAction(payload);
+      console.log("Dízimo enviado:", payload);
 
-    if (res.success) {
-        setDescricao("");
-        setValor("");
-        setData(hoje);
-        setSugestoes([]);
-        setIdUsuario(null);
-        setIsOpen(false);
-        if (onSuccess) onSuccess();
-    } else {
-        alert("Erro ao salvar dízimo: " + res.error);
+      const res = await criarMovimentacaoAction(payload);
+
+      if (res.success) {
+          setDescricao("");
+          setValor("");
+          setData(hoje);
+          setSugestoes([]);
+          setIdUsuario(null);
+          setIsOpen(false);
+          if (onSuccess) onSuccess();
+      } else {
+          alert("Erro ao salvar dízimo: " + res.error);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -140,9 +148,12 @@ export default function FormDizimos({ onSuccess }: DizimoModalProps) {
                 </button>
                 <button
                   type="submit"
-                  className="bg-green-600 text-white px-4 py-2 rounded cursor-pointer"
+                  disabled={isSubmitting}
+                  className={`text-white px-4 py-2 rounded cursor-pointer ${
+                    isSubmitting ? "bg-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
+                  }`}
                 >
-                  Salvar
+                  {isSubmitting ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </form>
