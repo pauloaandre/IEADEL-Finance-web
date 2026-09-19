@@ -3,17 +3,17 @@ import { useState } from "react";
 import { buscarUsuariosPorNomeAction } from "@/actions/usuarios";
 import { criarMovimentacaoAction } from "@/actions/movimentacoes";
 
-type Pessoa = { id_usuario: number; nome: string };
+type Pessoa = { id_usuario: string; nome: string };
 
 interface DizimoModalProps {
   onSuccess?: () => void;
 }
 
-export default function DizimoModal({ onSuccess }: DizimoModalProps) {
+export default function FormDizimos({ onSuccess }: DizimoModalProps) {
   const hoje = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split("T")[0];
   const [isOpen, setIsOpen] = useState(false); 
   const [descricao, setDescricao] = useState("");
-  const [id_usuario, setIdUsuario] = useState<number | null>(null);
+  const [id_usuario, setIdUsuario] = useState<string | null>(null);
   const [valor, setValor] = useState("");
   const [data, setData] = useState(hoje);
   const [sugestoes, setSugestoes] = useState<Pessoa[]>([]);

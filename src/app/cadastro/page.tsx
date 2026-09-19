@@ -1,18 +1,19 @@
 "use client"; 
 import Link from "next/link";
 import Image from "next/image";
-import Head from "next/head";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { listarCongregacoesAction } from "@/actions/congregacoes";
+import { cadastrarUsuarioAction } from "@/actions/cadastro";
 
 interface Congregacao {
-    idCongregacao: string;
+    idCongregacao: number;
     nome: string;
 }
 
-export default function Home() {
+export default function CadastroPage() {
     const [email, setEmail] = useState("");
     const [senha, setSenha] = useState("");
     const [showSenha, setShowSenha] = useState(false);
@@ -27,10 +28,13 @@ export default function Home() {
     useEffect(() => {
         async function fetchCongregacoes() {
             try {
-                const res = await fetch("/api/congregacoes");
-                const data = await res.json();
-                const congregacoesOrdenadas = data.sort((a: Congregacao, b: Congregacao) => Number(a.idCongregacao) - Number(b.idCongregacao));
-                setOpcoes(congregacoesOrdenadas);
+                const res = await listarCongregacoesAction();
+                if (res.success) {
+                    const congregacoesOrdenadas = res.data.sort(
+                        (a: Congregacao, b: Congregacao) => a.idCongregacao - b.idCongregacao
+                    );
+                    setOpcoes(congregacoesOrdenadas);
+                }
             } catch (err) {
                 console.error("Erro ao carregar congregações:", err);
             }
@@ -41,6 +45,7 @@ export default function Home() {
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        setErro("");
 
         // Formata o nome para Capitalize (Primeira Letra de Cada Nome Maiúscula)
         const nomeFormatado = nome
@@ -49,23 +54,20 @@ export default function Home() {
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(" ");
 
-        const res = await fetch("/api/cadastro", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: nomeFormatado, email, senha, idCongregacao }),
+        const res = await cadastrarUsuarioAction({
+            nome: nomeFormatado,
+            email,
+            senha,
+            idCongregacao,
         });
-        const data = await res.json();
-        console.log(data);
-        if (res.ok) {
+
+        if (res.success) {
             setSucesso(true);
-            // Opcional: redirecionar após alguns segundos ou manter a mensagem
             setTimeout(() => {
               router.push("/");
             }, 5000);
         } else {
-            if(data?.error) {
-                setErro(data.error)
-            }
+            setErro(res.error);
         }
     }
 
@@ -88,9 +90,7 @@ export default function Home() {
 
     return (
         <>
-            <Head>
-                <title>Cadastro IEADEL Finance</title>
-            </Head>
+            <title>Cadastro IEADEL Finance</title>
             <div className="flex flex-col items-center w-full mt-4">
                 <main className="flex flex-col items-center gap-6">
                     <Image 
@@ -130,7 +130,7 @@ export default function Home() {
                         </div>
 
                         {erro && !sucesso && <span className="text-red-500 text-sm -mt-2 -mb-2">{erro}</span>}
-                        {sucesso && <span className="text-green-500 text-sm font-semibold -mt-2 -mb-2 text-center">Cadastro realizado! Verifique sua caixa de entrada para confirmar seu email. Você será redirecionado para o login.</span>}
+                        {sucesso && <span className="text-green-500 text-sm font-semibold -mt-2 -mb-2 text-center">Cadastro realizado com sucesso! Você será redirecionado para o login.</span>}
 
                         <div>
                             <select

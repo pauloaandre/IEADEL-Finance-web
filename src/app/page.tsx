@@ -4,7 +4,7 @@ import Image from "next/image";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { createClient } from "@/utils/supabase/client";
 import { useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -35,21 +35,20 @@ function LoginForm() {
     setErro("");
     setSucesso("");
 
-    const res = await signIn("credentials", {
-      redirect: false,
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password: senha,
-      callbackUrl: "/",
     });
 
-    if (res?.error) {
-      if (res.status === 429) {
+    if (error) {
+      if (error.message.includes("rate limit") || error.message.includes("429")) {
         setErro("Muitas tentativas de login. Aguarde alguns minutos e tente novamente.");
       } else {
-        setErro(res.error === "CredentialsSignin" ? "Usuário ou senha incorretos." : res.error);
+        setErro("Usuário ou senha incorretos.");
       }
     } else {
-      window.location.href = "/"; // Isso forçará um reload. O ideal seria ter uma página de despache.
+      window.location.href = "/"; // reload to apply session
     }
   }
 
@@ -124,9 +123,7 @@ export default function Home() {
 
     return (
         <>
-          <head>
-              <title>Login IEADEL Finance</title>
-          </head>
+          <title>Login IEADEL Finance</title>
           <div className="flex flex-col items-center w-full mt-8">
               <main className="flex flex-col items-center gap-4">
                   <Image 

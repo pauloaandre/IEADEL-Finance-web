@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
 import Image from "next/image";
-import Head from "next/head";
 import NavBar from "@/components/navbar";
 import MonthSelector from "@/components/monthselector";
 import { calcularTotalGeralAction, calcularTotaisMensaisAction } from "@/actions/movimentacoes";
@@ -61,9 +60,7 @@ export default function HomeAdmin() {
 
     return (
         <>
-            <Head>
-                <title>Home</title>
-            </Head>
+            <title>Home</title>
             <div className="min-h-screen bg-slate-50 pb-10">
                 <NavBar />
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

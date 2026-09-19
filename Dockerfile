@@ -8,7 +8,6 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
-COPY prisma ./prisma/
 RUN npm ci
 
 # Rebuild the source code only when needed
@@ -16,9 +15,6 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Generate prisma client before building Next.js
-RUN npx prisma generate
 
 # Build the Next.js application
 RUN npm run build
@@ -43,8 +39,6 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-# Copy prisma folder if you want to run migrations in production
-COPY --from=builder /app/prisma ./prisma
 
 USER nextjs
 

@@ -1,6 +1,5 @@
 "use client";
 import Image from "next/image";
-import Head from "next/head";
 import NavBar from "@/components/navbar";
 import MonthSelector from "@/components/monthselector";
 import { useSearchParams } from "next/navigation";
@@ -73,9 +72,7 @@ function ViewCongregacaoContent() {
 
     return (
         <>
-            <Head>
-                <title>Visualizar {nomeCongregacao}</title>
-            </Head>
+            <title>Visualizar {nomeCongregacao}</title>
             <div className="min-h-screen bg-slate-50 pb-10">
                 <NavBar />
                 

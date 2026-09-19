@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import MonthSelector from "@/components/monthselector";
 import NavBar from "@/components/navbar";
 import { parseDateLocal } from "@/utils/date";
-import { useSession } from "next-auth/react";
+import { getSessionUserAction } from "@/actions/auth";
 import { buscarCongregacaoPorIdAction } from "@/actions/congregacoes";
 import { calcularTotaisMensaisAction, listarMovimentacoesAction } from "@/actions/movimentacoes";
 
@@ -40,7 +40,11 @@ export default function GerarRelatorio() {
   const [loading, setLoading] = useState(false);
   const [nomeCongregacao, setNomeCongregacao] = useState("Carregando...");
 
-  const { data: session } = useSession();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    getSessionUserAction().then(setUser);
+  }, []);
 
   useEffect(() => {
     const fetchCongregacao = async () => {
@@ -48,8 +52,8 @@ export default function GerarRelatorio() {
         const params = new URLSearchParams(window.location.search);
         let idCongregacao = params.get("id");
 
-        if (!idCongregacao && session?.user?.congregacaoId) {
-          idCongregacao = String(session.user.congregacaoId);
+        if (!idCongregacao && user?.congregacaoId) {
+          idCongregacao = String(user.congregacaoId);
         }
 
         if (idCongregacao) {
@@ -67,10 +71,10 @@ export default function GerarRelatorio() {
       }
     };
 
-    if (session) {
+    if (user) {
         fetchCongregacao();
     }
-  }, [session]);
+  }, [user]);
 
   const fetchRelatorioData = async (m: number, a: number) => {
     setLoading(true);
@@ -81,8 +85,8 @@ export default function GerarRelatorio() {
       const params = new URLSearchParams(window.location.search);
       let idCongregacao = params.get("id");
 
-      if (!idCongregacao && session?.user?.congregacaoId) {
-          idCongregacao = String(session.user.congregacaoId);
+      if (!idCongregacao && user?.congregacaoId) {
+          idCongregacao = String(user.congregacaoId);
       }
       
       const idCongNum = idCongregacao ? Number(idCongregacao) : undefined;
@@ -122,10 +126,10 @@ export default function GerarRelatorio() {
   };
 
   useEffect(() => {
-    if (session) {
+    if (user) {
         fetchRelatorioData(mes, ano);
     }
-  }, [mes, ano, session]);
+  }, [mes, ano, user]);
 
   const dizimosProcessados = useMemo(() => {
     const agrupados = dizimos.reduce((acc, curr) => {

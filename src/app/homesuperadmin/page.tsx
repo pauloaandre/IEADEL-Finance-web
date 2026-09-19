@@ -1,14 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import NavBar from "@/components/navbar";
-import Head from "next/head";
 import Link from "next/link";
 import { Users, Building2, UserPlus, CheckCircle2, Plus, ArrowDownCircle } from "lucide-react";
 import { listarUsuariosAction, atualizarUsuarioAction } from "@/actions/usuarios";
 import { listarCongregacoesAction, criarCongregacaoAction } from "@/actions/congregacoes";
 
 interface Usuario {
-  id: number;
+  id: string;
   nome: string;
   email: string;
   perfil: string;
@@ -30,7 +29,7 @@ export default function HomeSuperAdmin() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<{id: number, nome: string, perfil: string} | null>(null);
+  const [selectedUser, setSelectedUser] = useState<{id: string, nome: string, perfil: string} | null>(null);
   const [targetPerfil, setTargetPerfil] = useState<string>("");
 
   const fetchData = async () => {
@@ -106,9 +105,7 @@ export default function HomeSuperAdmin() {
 
   return (
     <>
-      <Head>
-        <title>Dashboard SuperAdmin</title>
-      </Head>
+      <title>Dashboard SuperAdmin</title>
       <div className="min-h-screen bg-gray-50">
         <NavBar />
         

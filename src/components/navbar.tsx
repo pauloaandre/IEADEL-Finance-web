@@ -1,9 +1,10 @@
 "use client"; 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { createClient } from "@/utils/supabase/client";
+import { getSessionUserAction } from "@/actions/auth";
 import { User, LogOut, ChevronDown, LayoutDashboard, ReceiptText, Wallet, Landmark, FileText } from "lucide-react";
 
 export default function NavBar() {
@@ -11,21 +12,24 @@ export default function NavBar() {
     const [nome, setNome] = useState("");
     const [perfil, setPerfil] = useState("");
     const pathname = usePathname();
-
-    const { data: session } = useSession();
+    const router = useRouter();
 
     useEffect(() => {
-        if (session?.user) {
-            const user = session.user;
-            const nomeCompleto = (user.nome || "").split(" ");
-            const primeirosNomes = nomeCompleto.slice(0, 2).join(" ");
-            setNome(primeirosNomes);
-            setPerfil(user.perfil || "");
-        }
-    }, [session]);
+        getSessionUserAction().then((user) => {
+            if (user) {
+                const nomeCompleto = (user.nome || "").split(" ");
+                const primeirosNomes = nomeCompleto.slice(0, 2).join(" ");
+                setNome(primeirosNomes);
+                setPerfil(user.perfil || "");
+            }
+        });
+    }, []);
 
     async function handleLogout() {
-        await signOut({ callbackUrl: "/" });
+        const supabase = createClient();
+        await supabase.auth.signOut();
+        router.push("/");
+        router.refresh();
     }
 
     const homeHref = perfil === "SUPER_ADMIN" ? "/homesuperadmin" : (perfil === "ADMIN" ? "/homeadmin" : (perfil === "USER" ? "/homeuser" : "/"));

@@ -14,7 +14,7 @@ export interface Dizimo {
     descricao: string;
     valor: number;
     tipo: string;
-    idUsuario: number | null;
+    idUsuario: string | null;
     nomeUsuario: string | null;
     idCongregacao: number;
     dataRegistro: string | null;

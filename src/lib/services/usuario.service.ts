@@ -1,5 +1,4 @@
-import { prisma } from '@/lib/prisma'
-import bcrypt from 'bcryptjs'
+import { createClient } from '@/utils/supabase/server'
 import type { SessionUser } from '@/lib/session'
 import type {
   UsuarioResponse,
@@ -29,102 +28,47 @@ export class ConflictError extends Error {
 }
 
 /**
- * Converte entidade Prisma Usuario (com congregacao inclusa) para UsuarioResponse DTO.
+ * Converte o retorno do Supabase para UsuarioResponse DTO.
  */
-function toUsuarioResponse(usuario: {
-  id: number
-  nome: string
-  email: string
-  perfil: string | null
-  ativo?: boolean | null
-  congregacaoId: number | null
-  congregacao?: { idCongregacao: number; nome: string } | null
-}): UsuarioResponse {
+function toUsuarioResponse(usuario: any): UsuarioResponse {
   return {
-    id: usuario.id,
+    id: usuario.id_usuario,
     nome: usuario.nome,
     email: usuario.email,
     perfil: (usuario.perfil as PerfilType) ?? 'USER',
-    idCongregacao: usuario.congregacao?.idCongregacao ?? usuario.congregacaoId ?? null,
+    idCongregacao: usuario.congregacao?.id_congregacao ?? usuario.id_congregacao ?? null,
     nomeCongregacao: usuario.congregacao?.nome ?? null,
     ativo: usuario.ativo ?? null,
   }
 }
 
 /**
- * Valida se o usuário logado tem permissão para acessar ou modificar o usuário solicitado.
- * Replica exatamente a regra de segurança do Spring Boot:
- *  - SUPER_ADMIN acessa tudo
- *  - O próprio usuário acessa a si mesmo
- *  - ADMIN acessa usuários da sua própria congregação
- */
-export function validarAcesso(
-  solicitado: { id: number; congregacaoId: number | null },
-  logado: SessionUser
-): void {
-  const logadoId = Number(logado.id)
-
-  if (logado.perfil === 'SUPER_ADMIN') {
-    return
-  }
-
-  if (solicitado.id === logadoId) {
-    return
-  }
-
-  if (
-    logado.perfil === 'ADMIN' &&
-    logado.congregacaoId !== null &&
-    solicitado.congregacaoId !== null &&
-    logado.congregacaoId === solicitado.congregacaoId
-  ) {
-    return
-  }
-
-  throw new AccessDeniedError()
-}
-
-/**
- * Lista usuários baseado no perfil do usuário logado:
- *  - SUPER_ADMIN: todos os usuários ativos
- *  - ADMIN: todos os usuários da congregação do admin
- *  - USER: apenas o próprio usuário
+ * Lista usuários utilizando as políticas RLS do Supabase.
  */
 export async function listarUsuarios(logado: SessionUser): Promise<UsuarioResponse[]> {
-  const logadoId = Number(logado.id)
+  const supabase = await createClient()
 
+  // O RLS cuidará do isolamento de dados:
+  // SUPER_ADMIN vê todos. ADMIN vê os da sua congregação. USER vê apenas a si mesmo.
+  let query = supabase.from('usuario').select('*, congregacao(id_congregacao, nome)').order('nome', { ascending: true })
+
+  // Comportamento herdado: SUPER_ADMIN via apenas usuários ativos.
   if (logado.perfil === 'SUPER_ADMIN') {
-    const usuarios = await prisma.usuario.findMany({
-      where: { ativo: true },
-      include: { congregacao: true },
-      orderBy: { nome: 'asc' },
-    })
-    return usuarios.map(toUsuarioResponse)
+    query = query.eq('ativo', true)
   }
 
-  if (logado.perfil === 'ADMIN' && logado.congregacaoId !== null) {
-    const usuarios = await prisma.usuario.findMany({
-      where: { congregacaoId: logado.congregacaoId },
-      include: { congregacao: true },
-      orderBy: { nome: 'asc' },
-    })
-    return usuarios.map(toUsuarioResponse)
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Erro ao listar usuarios no Supabase:', error)
+    return []
   }
 
-  // Usuário comum: apenas a si mesmo
-  const usuarioProprio = await prisma.usuario.findUnique({
-    where: { id: logadoId },
-    include: { congregacao: true },
-  })
-
-  if (!usuarioProprio) return []
-  return [toUsuarioResponse(usuarioProprio)]
+  return (data || []).map(toUsuarioResponse)
 }
 
 /**
- * Busca usuários por nome com filtro case-insensitive:
- *  - SUPER_ADMIN: busca global em todo o sistema
- *  - ADMIN / USER: busca restrita à congregação do usuário logado
+ * Busca usuários por nome com filtro case-insensitive e RLS.
  */
 export async function buscarUsuariosPorNome(
   nome: string,
@@ -135,137 +79,130 @@ export async function buscarUsuariosPorNome(
   }
 
   const termo = nome.trim()
+  const supabase = await createClient()
 
-  if (logado.perfil === 'SUPER_ADMIN') {
-    const usuarios = await prisma.usuario.findMany({
-      where: {
-        nome: { contains: termo, mode: 'insensitive' },
-      },
-      include: { congregacao: true },
-      orderBy: { nome: 'asc' },
-    })
-    return usuarios.map(toUsuarioResponse)
-  }
+  const { data, error } = await supabase
+    .from('usuario')
+    .select('*, congregacao(id_congregacao, nome)')
+    .ilike('nome', `%${termo}%`)
+    .order('nome', { ascending: true })
 
-  if (logado.congregacaoId === null) {
+  if (error) {
+    console.error('Erro ao buscar usuarios no Supabase:', error)
     return []
   }
 
-  const usuarios = await prisma.usuario.findMany({
-    where: {
-      nome: { contains: termo, mode: 'insensitive' },
-      congregacaoId: logado.congregacaoId,
-    },
-    include: { congregacao: true },
-    orderBy: { nome: 'asc' },
-  })
-
-  return usuarios.map(toUsuarioResponse)
+  return (data || []).map(toUsuarioResponse)
 }
 
 /**
- * Busca usuário por ID com validação de acesso.
+ * Busca usuário por ID (UUID string). RLS garantirá a segurança.
  */
 export async function buscarUsuarioPorId(
-  id: number,
+  id: string,
   logado: SessionUser
 ): Promise<UsuarioResponse> {
-  const usuario = await prisma.usuario.findUnique({
-    where: { id },
-    include: { congregacao: true },
-  })
+  // Usuário comum só pode acessar seus próprios dados
+  if (logado.perfil === 'USER' && id !== logado.id) {
+    throw new AccessDeniedError('Você só pode visualizar seu próprio usuário.')
+  }
 
-  if (!usuario) {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('usuario')
+    .select('*, congregacao(id_congregacao, nome)')
+    .eq('id_usuario', id)
+    .single()
+
+  if (error || !data) {
+    // Se o RLS bloqueou a leitura, também cairá aqui como não encontrado
     throw new NotFoundError()
   }
 
-  validarAcesso(usuario, logado)
+  // Admin só pode visualizar usuários da sua congregação
+  if (logado.perfil === 'ADMIN' && data.id_congregacao !== logado.congregacaoId) {
+    throw new AccessDeniedError('Você não tem permissão para visualizar usuários de outra congregação.')
+  }
 
-  return toUsuarioResponse(usuario)
+  return toUsuarioResponse(data)
 }
 
 /**
  * Atualiza os dados de um usuário:
- *  - Valida acesso
- *  - Trata atualização de nome, email (com verificação de duplicidade), senha (com hash BCrypt)
- *  - Campos perfil, ativo e idCongregacao são restritos a ADMIN / SUPER_ADMIN
+ * RLS também aplica regras de segurança.
  */
 export async function atualizarUsuario(
-  id: number,
+  id: string,
   dados: UpdateUsuarioInput,
   logado: SessionUser
 ): Promise<UsuarioResponse> {
-  const logadoId = Number(logado.id)
+  const supabase = await createClient()
 
-  const existente = await prisma.usuario.findUnique({
-    where: { id },
-    include: { congregacao: true },
-  })
+  // Verificar existência e restrições
+  const { data: existente, error: findError } = await supabase
+    .from('usuario')
+    .select('id_usuario, email')
+    .eq('id_usuario', id)
+    .single()
 
-  if (!existente) {
+  if (findError || !existente) {
     throw new NotFoundError()
   }
 
-  validarAcesso(existente, logado)
-
-  // Usuário comum não pode alterar terceiros
-  if (logado.perfil === 'USER' && existente.id !== logadoId) {
+  if (logado.perfil === 'USER' && existente.id_usuario !== logado.id) {
     throw new AccessDeniedError('Usuário comum não pode alterar dados de terceiros.')
   }
 
   // Verificação de e-mail duplicado
   if (dados.email && dados.email !== existente.email) {
-    const outro = await prisma.usuario.findUnique({
-      where: { email: dados.email },
-    })
-    if (outro && outro.id !== id) {
+    const { data: outro } = await supabase
+      .from('usuario')
+      .select('id_usuario')
+      .eq('email', dados.email)
+      .single()
+      
+    if (outro && outro.id_usuario !== id) {
       throw new ConflictError('E-mail já está em uso por outro usuário.')
     }
   }
 
-  const updateData: {
-    nome?: string
-    email?: string
-    senha?: string
-    perfil?: string
-    ativo?: boolean
-    congregacaoId?: number | null
-  } = {}
+  const updateData: any = {}
 
   if (dados.nome !== undefined) updateData.nome = dados.nome
   if (dados.email !== undefined) updateData.email = dados.email
-  if (dados.senha !== undefined && dados.senha.length > 0) {
-    updateData.senha = await bcrypt.hash(dados.senha, 10)
-  }
-
+  
   // Apenas ADMIN ou SUPER_ADMIN podem alterar perfil, ativo e congregação
   if (logado.perfil !== 'USER') {
     if (dados.perfil !== undefined) {
-      // ADMIN não pode conceder ou alterar perfil para SUPER_ADMIN
       if (logado.perfil === 'ADMIN' && dados.perfil === 'SUPER_ADMIN') {
         throw new AccessDeniedError('Apenas SUPER_ADMIN pode atribuir o perfil SUPER_ADMIN.')
       }
       updateData.perfil = dados.perfil
     }
 
-    if (dados.ativo !== undefined) {
-      updateData.ativo = dados.ativo
-    }
+    if (dados.ativo !== undefined) updateData.ativo = dados.ativo
 
     if (dados.idCongregacao !== undefined) {
-      // Se for ADMIN, só pode manter na sua própria congregação
       if (logado.perfil === 'ADMIN' && dados.idCongregacao !== logado.congregacaoId) {
         throw new AccessDeniedError('ADMIN só pode vincular usuários à sua própria congregação.')
       }
-      updateData.congregacaoId = dados.idCongregacao
+      updateData.id_congregacao = dados.idCongregacao
     }
   }
 
-  const salvo = await prisma.usuario.update({
-    where: { id },
-    data: updateData,
-    include: { congregacao: true },
-  })
+  const { data: salvo, error: updateError } = await supabase
+    .from('usuario')
+    .update(updateData)
+    .eq('id_usuario', id)
+    .select('*, congregacao(id_congregacao, nome)')
+    .single()
 
+  if (updateError || !salvo) {
+    throw new Error('Falha ao atualizar o usuário')
+  }
+
+  // TODO: Se dados.email ou dados.senha foram alterados, usar supabaseAdmin.auth.admin.updateUserById(id, { email, password })
+  
   return toUsuarioResponse(salvo)
 }

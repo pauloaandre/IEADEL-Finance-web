@@ -5,7 +5,7 @@ import { Dizimo } from "./movimentacoesdizimos";
 import { buscarUsuariosPorNomeAction } from "@/actions/usuarios";
 import { atualizarMovimentacaoAction } from "@/actions/movimentacoes";
 
-type Pessoa = { id_usuario: number; nome: string };
+type Pessoa = { id_usuario: string; nome: string };
 
 interface EditDizimoModalProps {
   isOpen: boolean;
@@ -16,7 +16,8 @@ interface EditDizimoModalProps {
 
 export default function EditDizimoModal({ isOpen, onClose, onSuccess, dizimo }: EditDizimoModalProps) {
   const [descricao, setDescricao] = useState("");
-  const [id_usuario, setIdUsuario] = useState<number | null>(null);
+  const [id_usuario, setIdUsuario] = useState<string | null>(dizimo?.idUsuario ? String(dizimo.idUsuario) : null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [valor, setValor] = useState("");
   const [data, setData] = useState("");
   const [sugestoes, setSugestoes] = useState<Pessoa[]>([]);

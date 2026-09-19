@@ -1,20 +1,21 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 import NavBar from "@/components/navbar";
-import Head from "next/head";
+import { getSessionUserAction } from "@/actions/auth";
 
 export default function PerfilPage() {
-    const { data: session } = useSession();
-    const user = session?.user;
+    const [user, setUser] = useState<any>(null);
+
+    useEffect(() => {
+        getSessionUserAction().then(setUser);
+    }, []);
 
     if (!user) return <div className="p-8 text-center">Carregando...</div>;
 
     return (
         <>
-            <Head>
-                <title>Meu Perfil</title>
-            </Head>
+            <title>Meu Perfil</title>
             <NavBar />
             <div className="flex flex-col items-center justify-center mt-10 px-4">
                 <div className="bg-white shadow-lg rounded-lg p-8 w-full max-w-md border border-gray-200">

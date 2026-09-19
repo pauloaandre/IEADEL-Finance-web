@@ -3,7 +3,6 @@ import NavBar from "@/components/navbar"
 import FormDizimo from "@/components/formdizimos";
 import Movimentacoes from "@/components/movimentacoesdizimos";
 import type { Dizimo } from "@/components/movimentacoesdizimos";
-import Head from "next/head";
 import { useEffect } from "react";
 import { useState } from "react";
 
@@ -18,9 +17,7 @@ export default function Dizimos() {
 
     return (
         <>
-            <Head>
-                <title>Dízimos</title>
-            </Head>
+            <title>Dízimos</title>
             <div>
                 <NavBar />
                 <Movimentacoes

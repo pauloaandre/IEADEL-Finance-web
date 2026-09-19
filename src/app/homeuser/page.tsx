@@ -1,10 +1,9 @@
 "use client";
-import Head from "next/head";
 import NavBar from "@/components/navbar";
 import YearSelector from "@/components/yearselector";
-import { useEffect } from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { parseDateLocal } from "@/utils/date";
+import { getSessionUserAction } from "@/actions/auth";
 import { listarMovimentacoesPorUsuarioAction } from "@/actions/movimentacoes";
 
 export default function HomeUser() {
@@ -16,6 +15,7 @@ export default function HomeUser() {
     const [ano, setAno] = useState(new Date().getFullYear());
 	const [dizimos, setDizimos] = useState<Dizimo[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [user, setUser] = useState<any>(null);
 	const meses = [
 		"Janeiro",
 		"Fevereiro",
@@ -31,27 +31,20 @@ export default function HomeUser() {
 		"Dezembro",
 	];
 
-	function getIdUsuario(): number | null {
-		try {
-			const user = localStorage.getItem("user");
-			return user ? JSON.parse(user).id : null;
-		} catch (error) {
-			console.error("Erro ao ler localStorage:", error);
-			return null;
-		}
-	}
+	useEffect(() => {
+		getSessionUserAction().then(setUser);
+	}, []);
 
 	useEffect(() => {
 		async function fetchDizimosPorUsuario() {
 			try {
 				setLoading(true);
-				const id_usuario = getIdUsuario();
-				if (!id_usuario) return;
+				if (!user?.id) return;
 
-				const res = await listarMovimentacoesPorUsuarioAction(id_usuario);
+				const res = await listarMovimentacoesPorUsuarioAction(user.id);
 				if (res.success) {
 					// Mapeia valor string para number
-					const parsedData = res.data.map(d => ({
+					const parsedData = res.data.map((d: any) => ({
 						id: d.id,
 						data: d.data,
 						valor: Number(d.valor)
@@ -65,8 +58,10 @@ export default function HomeUser() {
 				setLoading(false);
 			}
 		}
-		fetchDizimosPorUsuario();
-	}, [ano]);
+		if (user) {
+		  fetchDizimosPorUsuario();
+		}
+	}, [ano, user]);
 
 	const dizimosFiltrados = dizimos.filter(
 		(d) => parseDateLocal(d.data).getFullYear() === ano
@@ -74,9 +69,7 @@ export default function HomeUser() {
 
 	return (
 		<>
-			<Head>
-				<title>Home</title>
-			</Head>
+			<title>Home</title>
 			<div>
 				<NavBar />
 				<YearSelector

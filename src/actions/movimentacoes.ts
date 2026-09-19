@@ -59,7 +59,7 @@ export async function listarMovimentacoesAction(
 }
 
 export async function listarMovimentacoesPorUsuarioAction(
-  usuarioId: number
+  usuarioId: string
 ): Promise<ActionResult<MovimentacaoResponse[]>> {
   try {
     const { user, error: authError } = await requireAuth()
@@ -113,7 +113,6 @@ export async function criarMovimentacaoAction(
     const data = await criarMovimentacao(validation.data, user)
 
     revalidatePath('/movimentacoes')
-    revalidatePath('/api/movimentacoes')
 
     return { success: true, data }
   } catch (error) {
@@ -146,7 +145,6 @@ export async function atualizarMovimentacaoAction(
 
     revalidatePath('/movimentacoes')
     revalidatePath(`/movimentacoes/${id}`)
-    revalidatePath('/api/movimentacoes')
 
     return { success: true, data }
   } catch (error) {
@@ -172,7 +170,6 @@ export async function excluirMovimentacaoAction(
     await excluirMovimentacao(id, user)
 
     revalidatePath('/movimentacoes')
-    revalidatePath('/api/movimentacoes')
 
     return { success: true, data: null }
   } catch (error) {

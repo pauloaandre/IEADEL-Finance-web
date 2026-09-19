@@ -63,7 +63,7 @@ export async function buscarUsuariosPorNomeAction(
  * Server Action para buscar usuário por ID com controle de acesso.
  */
 export async function buscarUsuarioPorIdAction(
-  id: number
+  id: string
 ): Promise<ActionResult<UsuarioResponse>> {
   try {
     const { user, error: authError } = await requireAuth()
@@ -86,7 +86,7 @@ export async function buscarUsuarioPorIdAction(
  * Server Action para atualizar dados de usuário.
  */
 export async function atualizarUsuarioAction(
-  id: number,
+  id: string,
   input: UpdateUsuarioInput
 ): Promise<ActionResult<UsuarioResponse>> {
   try {
@@ -108,7 +108,6 @@ export async function atualizarUsuarioAction(
 
     revalidatePath('/usuarios')
     revalidatePath(`/usuarios/${id}`)
-    revalidatePath('/api/usuarios')
 
     return { success: true, data }
   } catch (error) {

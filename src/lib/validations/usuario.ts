@@ -29,7 +29,7 @@ export const UpdateUsuarioSchema = z.object({
 export type UpdateUsuarioInput = z.infer<typeof UpdateUsuarioSchema>
 
 export interface UsuarioResponse {
-  id: number
+  id: string
   nome: string
   email: string
   perfil: PerfilType

@@ -2,9 +2,9 @@
  * lib/session.ts
  *
  * Helpers para leitura e validação de sessão em Route Handlers e Server Actions.
- * Centraliza a lógica de autenticação, evitando repetição nos endpoints.
+ * Centraliza a lógica de autenticação conectando ao Supabase.
  */
-import { auth } from '@/auth'
+import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
 
 export type SessionUser = {
@@ -17,22 +17,37 @@ export type SessionUser = {
 }
 
 /**
- * Retorna o usuário da sessão ou null se não autenticado.
- * Equivalente ao SecurityContextHolder.getContext().getAuthentication().getPrincipal()
+ * Retorna o usuário da sessão combinando os dados do auth.users com a tabela public.usuario
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
-  const session = await auth()
-  if (!session?.user) return null
-  return session.user as SessionUser
+  const supabase = await createClient()
+  
+  // Pega a sessão JWT do Supabase Auth
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError || !authData?.user) return null
+
+  // Busca os dados complementares na tabela pública usuario
+  const { data: usuario, error: userError } = await supabase
+    .from('usuario')
+    .select('id_usuario, nome, email, perfil, id_congregacao, ativo')
+    .eq('id_usuario', authData.user.id)
+    .single()
+
+  if (userError || !usuario) return null
+
+  return {
+    id: usuario.id_usuario,
+    nome: usuario.nome,
+    email: usuario.email,
+    perfil: usuario.perfil as 'USER' | 'ADMIN' | 'SUPER_ADMIN',
+    congregacaoId: usuario.id_congregacao,
+    ativo: usuario.ativo
+  }
 }
 
 /**
  * Retorna o usuário da sessão ou uma resposta 401 JSON.
  * Uso em Route Handlers para evitar boilerplate.
- *
- * @example
- * const { user, error } = await requireAuth()
- * if (error) return error
  */
 export async function requireAuth(): Promise<
   { user: SessionUser; error: null } | { user: null; error: NextResponse }
@@ -67,10 +82,6 @@ export function temPerfil(
 
 /**
  * Retorna 403 JSON se o usuário não tiver o perfil mínimo exigido.
- *
- * @example
- * const denied = requirePerfil(user, 'ADMIN')
- * if (denied) return denied
  */
 export function requirePerfil(
   usuario: SessionUser,

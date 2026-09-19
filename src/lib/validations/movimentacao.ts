@@ -22,7 +22,7 @@ export const CreateMovimentacaoSchema = z
       .string({ error: 'Data é obrigatória.' })
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data deve estar no formato YYYY-MM-DD.'),
     tipo: TipoMovimentacaoEnum,
-    usuarioId: z.number().int().positive().optional().nullable(),
+    usuarioId: z.string().uuid('ID do usuário deve ser um UUID válido.').optional().nullable(),
     isVisitante: z.boolean().optional().nullable(),
   })
   .superRefine((data, ctx) => {
@@ -57,7 +57,7 @@ export interface MovimentacaoResponse {
   valor: string  // Decimal serializado como string para preservar precisão
   data: string   // ISO date string YYYY-MM-DD
   tipo: TipoMovimentacao
-  idUsuario: number | null
+  idUsuario: string | null
   nomeUsuario: string | null
   idCongregacao: number
   dataRegistro: string | null

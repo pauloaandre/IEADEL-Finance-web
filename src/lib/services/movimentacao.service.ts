@@ -1,6 +1,4 @@
-import { Decimal } from '@prisma/client/runtime/library'
-import { Prisma } from '@prisma/client'
-import { prisma } from '@/lib/prisma'
+import { createClient } from '@/utils/supabase/server'
 import type { SessionUser } from '@/lib/session'
 import type {
   MovimentacaoResponse,
@@ -37,32 +35,22 @@ export class BusinessRuleError extends Error {
 // Conversão de entidade para DTO
 // =============================================================================
 
-function toMovimentacaoResponse(m: {
-  id: number
-  descricao: string | null
-  valor: Decimal
-  data: Date
-  tipo: string
-  dataRegistro: Date | null
-  congregacaoId: number
-  usuario?: { id: number; nome: string } | null
-}): MovimentacaoResponse {
+function toMovimentacaoResponse(m: any): MovimentacaoResponse {
   return {
-    id: m.id,
+    id: m.id_mov,
     descricao: m.descricao,
-    valor: m.valor.toFixed(2),
-    data: m.data.toISOString().split('T')[0], // YYYY-MM-DD
+    valor: Number(m.valor).toFixed(2),
+    data: m.data, 
     tipo: m.tipo as TipoMovimentacao,
-    idUsuario: m.usuario?.id ?? null,
+    idUsuario: m.usuario?.id_usuario ?? m.id_usuario ?? null,
     nomeUsuario: m.usuario?.nome ?? null,
-    idCongregacao: m.congregacaoId,
-    dataRegistro: m.dataRegistro?.toISOString() ?? null,
+    idCongregacao: m.id_congregacao,
+    dataRegistro: m.data_registro ?? null,
   }
 }
 
 // =============================================================================
 // Proteção IDOR: resolve o congregacaoId efetivo
-// Replica exatamente a lógica dos controllers do Spring Boot
 // =============================================================================
 
 export function resolveIdorCongregacao(
@@ -70,67 +58,27 @@ export function resolveIdorCongregacao(
   idCongregacaoParam?: number
 ): { congregacaoId: number; error: null } | { congregacaoId: null; error: string } {
   if (logado.perfil === 'SUPER_ADMIN') {
-    // SUPER_ADMIN pode ver tudo (0) ou uma congregação específica
     return { congregacaoId: idCongregacaoParam ?? 0, error: null }
   }
 
-  // Não é SUPER_ADMIN: ignora o parâmetro e força a congregação do usuário logado
   if (!logado.congregacaoId) {
-    return {
-      congregacaoId: null,
-      error: 'Usuário não vinculado a uma congregação.',
-    }
+    return { congregacaoId: null, error: 'Usuário não vinculado a uma congregação.' }
   }
 
   return { congregacaoId: logado.congregacaoId, error: null }
 }
 
 // =============================================================================
-// Validação de acesso a uma movimentação específica
-// Replica validarAcesso() do MovimentacaoService do Spring Boot
-// =============================================================================
-
-function validarAcesso(
-  movimentacao: {
-    congregacaoId: number
-    usuarioId: number | null
-  },
-  logado: SessionUser
-): void {
-  if (logado.perfil === 'SUPER_ADMIN') return
-
-  const logadoId = Number(logado.id)
-
-  // Próprio usuário da movimentação
-  if (movimentacao.usuarioId !== null && movimentacao.usuarioId === logadoId) return
-
-  // ADMIN da mesma congregação
-  if (
-    logado.perfil === 'ADMIN' &&
-    logado.congregacaoId !== null &&
-    movimentacao.congregacaoId === logado.congregacaoId
-  ) {
-    return
-  }
-
-  throw new AccessDeniedError()
-}
-
-// =============================================================================
-// Normaliza mês: "3" → "03" (mesmo comportamento do Spring Boot)
+// Normaliza mês
 // =============================================================================
 function normalizeMes(mes: string): string {
   return mes.length === 1 ? `0${mes}` : mes
 }
 
 // =============================================================================
-// Serviços
+// Serviços (Com Supabase RLS)
 // =============================================================================
 
-/**
- * Lista movimentações por tipo, mês, ano e congregação.
- * Com proteção IDOR: se não for SUPER_ADMIN, força a congregação do usuário logado.
- */
 export async function listarPorMesAno(
   tipo: TipoMovimentacao,
   mes: string,
@@ -142,36 +90,30 @@ export async function listarPorMesAno(
   if (error) throw new AccessDeniedError(error)
 
   const mesNorm = normalizeMes(mes)
+  const dataInicio = `${ano}-${mesNorm}-01`
+  const dataFim = parseInt(mes) === 12
+    ? `${parseInt(ano) + 1}-01-01`
+    : `${ano}-${String(parseInt(mes) + 1).padStart(2, '0')}-01`
 
-  const dataInicio = new Date(`${ano}-${mesNorm}-01`)
-  const dataFim =
-    parseInt(mes) === 12
-      ? new Date(`${parseInt(ano) + 1}-01-01`)
-      : new Date(`${ano}-${String(parseInt(mes) + 1).padStart(2, '0')}-01`)
+  const supabase = await createClient()
+  let query = supabase
+    .from('movimentacao')
+    .select('*, usuario(id_usuario, nome)')
+    .eq('tipo', tipo)
+    .gte('data', dataInicio)
+    .lt('data', dataFim)
+    .order('data', { ascending: true })
 
-  const whereMovimentacao: Prisma.MovimentacaoWhereInput = {
-    tipo,
-    data: { gte: dataInicio, lt: dataFim },
-  }
   if (congregacaoId !== 0) {
-    whereMovimentacao.congregacaoId = congregacaoId as number
+    query = query.eq('id_congregacao', congregacaoId)
   }
 
-  const movimentacoes = await prisma.movimentacao.findMany({
-    where: whereMovimentacao,
-    include: {
-      usuario: { select: { id: true, nome: true } },
-    },
-    orderBy: { data: 'asc' },
-  })
+  const { data, error: dbError } = await query
+  if (dbError) throw new Error('Falha ao listar movimentações')
 
-  return movimentacoes.map(toMovimentacaoResponse)
+  return (data || []).map(toMovimentacaoResponse)
 }
 
-/**
- * Calcula totais mensais por tipo (dizimo, oferta, despesa).
- * Com proteção IDOR.
- */
 export async function calcularTotaisMensais(
   mes: string,
   ano: string,
@@ -182,45 +124,38 @@ export async function calcularTotaisMensais(
   if (error) throw new AccessDeniedError(error)
 
   const mesNorm = normalizeMes(mes)
-  const dataInicio = new Date(`${ano}-${mesNorm}-01`)
-  const dataFim =
-    parseInt(mes) === 12
-      ? new Date(`${parseInt(ano) + 1}-01-01`)
-      : new Date(`${ano}-${String(parseInt(mes) + 1).padStart(2, '0')}-01`)
+  const dataInicio = `${ano}-${mesNorm}-01`
+  const dataFim = parseInt(mes) === 12
+    ? `${parseInt(ano) + 1}-01-01`
+    : `${ano}-${String(parseInt(mes) + 1).padStart(2, '0')}-01`
 
-  const baseWhere = {
-    data: { gte: dataInicio, lt: dataFim },
-    ...(congregacaoId !== 0 ? { congregacaoId } : {}),
+  const supabase = await createClient()
+  let query = supabase
+    .from('movimentacao')
+    .select('valor, tipo')
+    .gte('data', dataInicio)
+    .lt('data', dataFim)
+
+  if (congregacaoId !== 0) {
+    query = query.eq('id_congregacao', congregacaoId)
   }
 
-  const calcular = async (tipo: string): Promise<string> => {
-    const whereCalc: Prisma.MovimentacaoWhereInput = {
-      tipo,
-      data: { gte: dataInicio, lt: dataFim },
-    }
-    if (congregacaoId !== 0) {
-      whereCalc.congregacaoId = congregacaoId as number
-    }
-    const result = await prisma.movimentacao.aggregate({
-      _sum: { valor: true },
-      where: whereCalc,
-    })
-    return (result._sum?.valor ?? new Decimal(0)).toFixed(2)
+  const { data } = await query
+  
+  let dizimo = 0, oferta = 0, despesa = 0
+  for (const m of data || []) {
+    if (m.tipo === 'DIZIMO') dizimo += Number(m.valor)
+    if (m.tipo === 'OFERTA') oferta += Number(m.valor)
+    if (m.tipo === 'DESPESA') despesa += Number(m.valor)
   }
 
-  const [dizimo, oferta, despesa] = await Promise.all([
-    calcular('DIZIMO'),
-    calcular('OFERTA'),
-    calcular('DESPESA'),
-  ])
-
-  return { dizimo, oferta, despesa }
+  return { 
+    dizimo: dizimo.toFixed(2), 
+    oferta: oferta.toFixed(2), 
+    despesa: despesa.toFixed(2) 
+  }
 }
 
-/**
- * Calcula o total geral (dízimos + ofertas - despesas) por congregação.
- * Replica calcularTotalGeralPorCongregacao() do Spring Boot.
- */
 export async function calcularTotalGeral(
   logado: SessionUser,
   idCongregacaoParam?: number
@@ -228,91 +163,77 @@ export async function calcularTotalGeral(
   const { congregacaoId, error } = resolveIdorCongregacao(logado, idCongregacaoParam)
   if (error) throw new AccessDeniedError(error)
 
-  const geralWhere = congregacaoId !== 0 ? { congregacaoId } : {}
-
-  const calcular = async (tipo: string): Promise<Decimal> => {
-    const whereCalc: Prisma.MovimentacaoWhereInput = { tipo }
-    if (congregacaoId !== 0) {
-      whereCalc.congregacaoId = congregacaoId as number
-    }
-    const result = await prisma.movimentacao.aggregate({
-      _sum: { valor: true },
-      where: whereCalc,
-    })
-    return result._sum?.valor ?? new Decimal(0)
+  const supabase = await createClient()
+  let query = supabase.from('movimentacao').select('valor, tipo')
+  
+  if (congregacaoId !== 0) {
+    query = query.eq('id_congregacao', congregacaoId)
   }
 
-  const [dizimos, ofertas, despesas] = await Promise.all([
-    calcular('DIZIMO'),
-    calcular('OFERTA'),
-    calcular('DESPESA'),
-  ])
+  const { data } = await query
+  
+  let total = 0
+  for (const m of data || []) {
+    if (m.tipo === 'DIZIMO') total += Number(m.valor)
+    if (m.tipo === 'OFERTA') total += Number(m.valor)
+    if (m.tipo === 'DESPESA') total -= Number(m.valor)
+  }
 
-  const total = dizimos.plus(ofertas).minus(despesas)
   return { total: total.toFixed(2) }
 }
 
-/**
- * Busca uma movimentação por ID com controle de acesso.
- */
 export async function buscarPorId(
   id: number,
   logado: SessionUser
 ): Promise<MovimentacaoResponse> {
-  const mov = await prisma.movimentacao.findUnique({
-    where: { id },
-    include: { usuario: { select: { id: true, nome: true } } },
-  })
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('movimentacao')
+    .select('*, usuario(id_usuario, nome)')
+    .eq('id_mov', id)
+    .single()
 
-  if (!mov) throw new NotFoundError()
+  if (error || !data) throw new NotFoundError()
 
-  validarAcesso(mov, logado)
-
-  return toMovimentacaoResponse(mov)
-}
-
-/**
- * Lista movimentações por usuário com controle de acesso.
- * Replica listarPorUsuario() do MovimentacaoService do Spring Boot.
- */
-export async function listarPorUsuario(
-  usuarioId: number,
-  logado: SessionUser
-): Promise<MovimentacaoResponse[]> {
-  const logadoId = Number(logado.id)
-
-  // Valida acesso: só pode ver movimentações de outro usuário se for SUPER_ADMIN ou ADMIN da mesma congregação
-  if (logado.perfil !== 'SUPER_ADMIN' && logadoId !== usuarioId) {
-    const solicitado = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
-      select: { congregacaoId: true },
-    })
-
-    if (!solicitado) throw new NotFoundError('Usuário não encontrado.')
-
-    if (
-      logado.perfil !== 'ADMIN' ||
-      logado.congregacaoId === null ||
-      solicitado.congregacaoId === null ||
-      logado.congregacaoId !== solicitado.congregacaoId
-    ) {
-      throw new AccessDeniedError('Você não tem permissão para acessar os dados deste usuário.')
+  // Verificação explícita IDOR na camada de serviço (defesa em profundidade)
+  if (logado.perfil !== 'SUPER_ADMIN') {
+    if (data.id_congregacao !== logado.congregacaoId) {
+      throw new AccessDeniedError('Você não tem permissão para acessar movimentações de outra congregação.')
+    }
+    if (logado.perfil === 'USER' && data.id_usuario !== logado.id) {
+      throw new AccessDeniedError('Você só pode visualizar suas próprias movimentações.')
     }
   }
 
-  const movimentacoes = await prisma.movimentacao.findMany({
-    where: { usuarioId },
-    include: { usuario: { select: { id: true, nome: true } } },
-    orderBy: { data: 'asc' },
-  })
-
-  return movimentacoes.map(toMovimentacaoResponse)
+  return toMovimentacaoResponse(data)
 }
 
-/**
- * Cria nova movimentação — restrito a ADMIN+.
- * Replica criar() do MovimentacaoService do Spring Boot.
- */
+export async function listarPorUsuario(
+  usuarioId: string,
+  logado: SessionUser
+): Promise<MovimentacaoResponse[]> {
+  // Usuário comum só pode listar suas próprias movimentações
+  if (logado.perfil === 'USER' && usuarioId !== logado.id) {
+    throw new AccessDeniedError('Você só pode visualizar suas próprias movimentações.')
+  }
+
+  const supabase = await createClient()
+  let query = supabase
+    .from('movimentacao')
+    .select('*, usuario(id_usuario, nome)')
+    .eq('id_usuario', usuarioId)
+
+  // Se não for SUPER_ADMIN, restringe também à congregação do usuário logado
+  if (logado.perfil !== 'SUPER_ADMIN') {
+    query = query.eq('id_congregacao', logado.congregacaoId)
+  }
+
+  const { data, error } = await query.order('data', { ascending: true })
+
+  if (error) throw new Error('Falha ao listar por usuário')
+  return (data || []).map(toMovimentacaoResponse)
+}
+
 export async function criarMovimentacao(
   dto: CreateMovimentacaoInput,
   logado: SessionUser
@@ -321,142 +242,110 @@ export async function criarMovimentacao(
     throw new BusinessRuleError('Usuário logado sem congregação não pode criar movimentação.')
   }
 
-  let usuarioId: number | null = null
+  const supabase = await createClient()
+  let usuarioId: string | null = null
 
   if (dto.isVisitante) {
-    // Busca o usuário Visitante da congregação do logado
-    const visitante = await prisma.usuario.findFirst({
-      where: {
-        congregacaoId: logado.congregacaoId,
-        nome: { startsWith: 'Visitante' },
-        ativo: false,
-      },
-      select: { id: true },
-    })
-    if (!visitante) {
-      throw new BusinessRuleError('Usuário Visitante não encontrado para esta congregação.')
-    }
-    usuarioId = visitante.id
+    const { data: visitante } = await supabase
+      .from('usuario')
+      .select('id_usuario')
+      .eq('id_congregacao', logado.congregacaoId)
+      .eq('ativo', false)
+      .ilike('nome', 'Visitante%')
+      .limit(1)
+      .single()
+      
+    if (!visitante) throw new BusinessRuleError('Usuário Visitante não encontrado para esta congregação.')
+    usuarioId = visitante.id_usuario
   } else if (dto.usuarioId) {
-    const dizimista = await prisma.usuario.findUnique({
-      where: { id: dto.usuarioId },
-      select: { id: true, congregacaoId: true },
-    })
-
-    if (!dizimista) throw new BusinessRuleError('Usuário dizimista não encontrado.')
-
-    // ADMIN só pode criar movimentação para usuários da sua congregação
-    if (logado.perfil !== 'SUPER_ADMIN') {
-      if (dizimista.congregacaoId !== logado.congregacaoId) {
-        throw new AccessDeniedError(
-          'Você só pode registrar movimentações para usuários da sua congregação.'
-        )
-      }
-    }
-
-    usuarioId = dizimista.id
+    usuarioId = dto.usuarioId
   }
 
-  const criada = await prisma.movimentacao.create({
-    data: {
+  const { data: criada, error } = await supabase
+    .from('movimentacao')
+    .insert({
       descricao: dto.descricao ?? null,
       valor: dto.valor,
-      data: new Date(dto.data),
+      data: dto.data,
       tipo: dto.tipo,
-      congregacaoId: logado.congregacaoId,
-      usuarioId,
-    },
-    include: { usuario: { select: { id: true, nome: true } } },
-  })
+      id_congregacao: logado.congregacaoId,
+      id_usuario: usuarioId,
+    })
+    .select('*, usuario(id_usuario, nome)')
+    .single()
 
+  if (error || !criada) throw new Error('Erro ao criar movimentação')
   return toMovimentacaoResponse(criada)
 }
 
-/**
- * Atualiza movimentação existente — verifica acesso e regras de negócio.
- * Replica atualizar() do MovimentacaoService do Spring Boot.
- */
 export async function atualizarMovimentacao(
   id: number,
   dto: CreateMovimentacaoInput,
   logado: SessionUser
 ): Promise<MovimentacaoResponse> {
-  const existente = await prisma.movimentacao.findUnique({
-    where: { id },
-    include: { usuario: { select: { id: true, nome: true } } },
-  })
+  if (logado.perfil === 'USER') {
+    throw new AccessDeniedError('Usuários comuns não têm permissão para editar movimentações.')
+  }
 
-  if (!existente) throw new NotFoundError()
-
-  validarAcesso(existente, logado)
-
-  let usuarioId: number | null = null
+  const supabase = await createClient()
+  let usuarioId: string | null = null
 
   if (dto.isVisitante) {
-    if (!existente.congregacaoId) {
-      throw new BusinessRuleError('Movimentação sem congregação não pode ter visitante.')
-    }
-    const visitante = await prisma.usuario.findFirst({
-      where: {
-        congregacaoId: existente.congregacaoId,
-        nome: { startsWith: 'Visitante' },
-        ativo: false,
-      },
-      select: { id: true },
-    })
+    const { data: visitante } = await supabase
+      .from('usuario')
+      .select('id_usuario')
+      .eq('id_congregacao', logado.congregacaoId)
+      .eq('ativo', false)
+      .ilike('nome', 'Visitante%')
+      .limit(1)
+      .single()
+      
     if (!visitante) throw new BusinessRuleError('Usuário Visitante não encontrado para esta congregação.')
-    usuarioId = visitante.id
+    usuarioId = visitante.id_usuario
   } else if (dto.usuarioId) {
-    const dizimista = await prisma.usuario.findUnique({
-      where: { id: dto.usuarioId },
-      select: { id: true, congregacaoId: true },
-    })
-    if (!dizimista) throw new BusinessRuleError('Usuário dizimista não encontrado.')
-
-    if (logado.perfil !== 'SUPER_ADMIN') {
-      if (
-        dizimista.congregacaoId === null ||
-        dizimista.congregacaoId !== existente.congregacaoId
-      ) {
-        throw new AccessDeniedError(
-          'Você só pode atribuir movimentações a usuários da mesma congregação.'
-        )
-      }
-    }
-    usuarioId = dizimista.id
+    usuarioId = dto.usuarioId
   }
-  // else: dto.usuarioId === null/undefined → desvincula usuário (usuarioId = null)
 
-  const atualizada = await prisma.movimentacao.update({
-    where: { id },
-    data: {
+  let query = supabase
+    .from('movimentacao')
+    .update({
       descricao: dto.descricao ?? null,
       valor: dto.valor,
-      data: new Date(dto.data),
+      data: dto.data,
       tipo: dto.tipo,
-      usuarioId,
-    },
-    include: { usuario: { select: { id: true, nome: true } } },
-  })
+      id_usuario: usuarioId,
+    })
+    .eq('id_mov', id)
 
+  // Se for ADMIN, garante que a alteração ocorre estritamente dentro da sua própria congregação
+  if (logado.perfil === 'ADMIN') {
+    query = query.eq('id_congregacao', logado.congregacaoId)
+  }
+
+  const { data: atualizada, error } = await query
+    .select('*, usuario(id_usuario, nome)')
+    .single()
+
+  if (error || !atualizada) throw new Error('Erro ao atualizar movimentação')
   return toMovimentacaoResponse(atualizada)
 }
 
-/**
- * Exclui movimentação — verifica acesso.
- */
 export async function excluirMovimentacao(
   id: number,
   logado: SessionUser
 ): Promise<void> {
-  const existente = await prisma.movimentacao.findUnique({
-    where: { id },
-    select: { congregacaoId: true, usuarioId: true },
-  })
+  if (logado.perfil === 'USER') {
+    throw new AccessDeniedError('Usuários comuns não têm permissão para excluir movimentações.')
+  }
 
-  if (!existente) throw new NotFoundError()
+  const supabase = await createClient()
+  let query = supabase.from('movimentacao').delete().eq('id_mov', id)
 
-  validarAcesso(existente, logado)
+  // Se for ADMIN, garante que a exclusão ocorre estritamente dentro da sua própria congregação
+  if (logado.perfil === 'ADMIN') {
+    query = query.eq('id_congregacao', logado.congregacaoId)
+  }
 
-  await prisma.movimentacao.delete({ where: { id } })
+  const { error } = await query
+  if (error) throw new Error('Falha ao excluir')
 }

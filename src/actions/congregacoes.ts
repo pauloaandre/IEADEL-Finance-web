@@ -50,7 +50,6 @@ export async function criarCongregacaoAction(
     const novaCongregacao = await criarCongregacao(validation.data)
 
     revalidatePath('/congregacoes')
-    revalidatePath('/api/congregacoes')
 
     return { success: true, data: novaCongregacao }
   } catch (error) {

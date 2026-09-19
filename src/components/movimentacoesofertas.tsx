@@ -13,8 +13,8 @@ export interface Oferta {
     data: string;
     descricao: string;
     valor: number;
-    tipo: string;
-    idUsuario: number | null;
+    tipo: 'DIZIMO' | 'OFERTA' | 'DESPESA';
+    idUsuario: string | null;
     nomeUsuario: string | null;
     idCongregacao: number;
     dataRegistro: string | null;
