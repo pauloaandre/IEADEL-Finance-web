@@ -28,7 +28,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
   serverExternalPackages: [],
   async headers() {
     return [
