@@ -245,19 +245,7 @@ export async function criarMovimentacao(
   const supabase = await createClient()
   let usuarioId: string | null = null
 
-  if (dto.isVisitante) {
-    const { data: visitante } = await supabase
-      .from('usuario')
-      .select('id_usuario')
-      .eq('id_congregacao', logado.congregacaoId)
-      .eq('ativo', false)
-      .ilike('nome', 'Visitante%')
-      .limit(1)
-      .single()
-      
-    if (!visitante) throw new BusinessRuleError('Usuário Visitante não encontrado para esta congregação.')
-    usuarioId = visitante.id_usuario
-  } else if (dto.usuarioId) {
+  if (!dto.isVisitante && dto.usuarioId) {
     usuarioId = dto.usuarioId
   }
 
@@ -290,19 +278,7 @@ export async function atualizarMovimentacao(
   const supabase = await createClient()
   let usuarioId: string | null = null
 
-  if (dto.isVisitante) {
-    const { data: visitante } = await supabase
-      .from('usuario')
-      .select('id_usuario')
-      .eq('id_congregacao', logado.congregacaoId)
-      .eq('ativo', false)
-      .ilike('nome', 'Visitante%')
-      .limit(1)
-      .single()
-      
-    if (!visitante) throw new BusinessRuleError('Usuário Visitante não encontrado para esta congregação.')
-    usuarioId = visitante.id_usuario
-  } else if (dto.usuarioId) {
+  if (!dto.isVisitante && dto.usuarioId) {
     usuarioId = dto.usuarioId
   }
 
