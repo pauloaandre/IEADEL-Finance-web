@@ -11,7 +11,7 @@ export type SessionUser = {
   id: string
   nome: string
   email: string
-  perfil: 'USER' | 'ADMIN' | 'SUPER_ADMIN'
+  perfil: 'USER' | 'ADMIN' | 'GESTOR' | 'SUPER_ADMIN'
   congregacaoId: number | null
   ativo: boolean
 }
@@ -39,7 +39,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     id: usuario.id_usuario,
     nome: usuario.nome,
     email: usuario.email,
-    perfil: usuario.perfil as 'USER' | 'ADMIN' | 'SUPER_ADMIN',
+    perfil: usuario.perfil as 'USER' | 'ADMIN' | 'GESTOR' | 'SUPER_ADMIN',
     congregacaoId: usuario.id_congregacao,
     ativo: usuario.ativo
   }
@@ -70,6 +70,7 @@ export async function requireAuth(): Promise<
 const PERFIL_NIVEL: Record<SessionUser['perfil'], number> = {
   USER: 1,
   ADMIN: 2,
+  GESTOR: 2,
   SUPER_ADMIN: 3,
 }
 
@@ -108,7 +109,7 @@ export function resolveIdorCongregacao(
   usuario: SessionUser,
   idCongregacaoParam?: number | null
 ): { congregacaoId: number; error: null } | { congregacaoId: null; error: NextResponse } {
-  if (usuario.perfil === 'SUPER_ADMIN') {
+  if (usuario.perfil === 'SUPER_ADMIN' || usuario.perfil === 'GESTOR') {
     return { congregacaoId: idCongregacaoParam ?? 0, error: null }
   }
 

@@ -32,7 +32,7 @@ export default function NavBar() {
         router.refresh();
     }
 
-    const homeHref = perfil === "SUPER_ADMIN" ? "/homesuperadmin" : (perfil === "ADMIN" ? "/homeadmin" : (perfil === "USER" ? "/homeuser" : "/"));
+    const homeHref = perfil === "SUPER_ADMIN" ? "/homesuperadmin" : (perfil === "GESTOR" ? "/homegestor" : (perfil === "ADMIN" ? "/homeadmin" : (perfil === "USER" ? "/homeuser" : "/")));
 
     return (
         <nav className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm">
@@ -93,7 +93,7 @@ export default function NavBar() {
                                         </Link>
                                     )}
                                     
-                                    {perfil !== "SUPER_ADMIN" && perfil !== "USER" && (
+                                    {(perfil === "ADMIN" || perfil === "GESTOR") && (
                                         <Link 
                                             href="/homeuser" 
                                             className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-slate-50 rounded-lg transition-colors"
@@ -101,6 +101,17 @@ export default function NavBar() {
                                         >
                                             <Wallet className="w-4 h-4 text-gray-400" />
                                             Meus Dízimos
+                                        </Link>
+                                    )}
+
+                                    {(perfil === "GESTOR" || perfil === "SUPER_ADMIN") && (
+                                        <Link 
+                                            href="/fechamento" 
+                                            className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-slate-50 rounded-lg transition-colors"
+                                            onClick={() => setIsMenuOpen(false)}
+                                        >
+                                            <Landmark className="w-4 h-4 text-gray-400" />
+                                            Fechamento
                                         </Link>
                                     )}
 

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import NavBar from "@/components/navbar";
 import Link from "next/link";
-import { Users, Building2, UserPlus, CheckCircle2, Plus, ArrowDownCircle } from "lucide-react";
+import { Users, Building2, UserPlus, CheckCircle2, Plus, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { listarUsuariosAction, atualizarUsuarioAction } from "@/actions/usuarios";
 import { listarCongregacoesAction, criarCongregacaoAction } from "@/actions/congregacoes";
 
@@ -213,32 +213,75 @@ export default function HomeSuperAdmin() {
                           <td className="px-6 py-4">
                             <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
                               user.perfil === 'SUPER_ADMIN' ? 'bg-purple-100 text-purple-700' :
+                              user.perfil === 'GESTOR' ? 'bg-teal-100 text-teal-700' :
                               user.perfil === 'ADMIN' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
                             }`}>
                               {user.perfil}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-center">
-                            {user.perfil === 'USER' && (
-                              <button 
-                                onClick={() => openConfirmModal(user, "ADMIN")}
-                                className="text-green-600 hover:text-green-800 flex items-center gap-1 mx-auto font-medium"
-                                title="Promover como Admin"
-                              >
-                                <CheckCircle2 size={18} />
-                                <span>Promover Admin</span>
-                              </button>
-                            )}
-                            {user.perfil === 'ADMIN' && (
-                              <button 
-                                onClick={() => openConfirmModal(user, "USER")}
-                                className="text-red-600 hover:text-red-800 flex items-center gap-1 mx-auto font-medium"
-                                title="Rebaixar para User"
-                              >
-                                <ArrowDownCircle size={18} />
-                                <span>Rebaixar User</span>
-                              </button>
-                            )}
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col items-center gap-1">
+                              {user.perfil === 'USER' && (
+                                <>
+                                  <button 
+                                    onClick={() => openConfirmModal(user, "ADMIN")}
+                                    className="text-green-600 hover:text-green-800 flex items-center gap-1 font-medium text-xs"
+                                    title="Promover para Admin"
+                                  >
+                                    <ArrowUpCircle size={16} />
+                                    <span>Promover Admin</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => openConfirmModal(user, "GESTOR")}
+                                    className="text-teal-600 hover:text-teal-800 flex items-center gap-1 font-medium text-xs"
+                                    title="Promover para Gestor"
+                                  >
+                                    <ArrowUpCircle size={16} />
+                                    <span>Promover Gestor</span>
+                                  </button>
+                                </>
+                              )}
+                              {user.perfil === 'ADMIN' && (
+                                <>
+                                  <button 
+                                    onClick={() => openConfirmModal(user, "GESTOR")}
+                                    className="text-teal-600 hover:text-teal-800 flex items-center gap-1 font-medium text-xs"
+                                    title="Promover para Gestor"
+                                  >
+                                    <ArrowUpCircle size={16} />
+                                    <span>Promover Gestor</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => openConfirmModal(user, "USER")}
+                                    className="text-red-600 hover:text-red-800 flex items-center gap-1 font-medium text-xs"
+                                    title="Rebaixar para User"
+                                  >
+                                    <ArrowDownCircle size={16} />
+                                    <span>Rebaixar User</span>
+                                  </button>
+                                </>
+                              )}
+                              {user.perfil === 'GESTOR' && (
+                                <>
+                                  <button 
+                                    onClick={() => openConfirmModal(user, "ADMIN")}
+                                    className="text-orange-600 hover:text-orange-800 flex items-center gap-1 font-medium text-xs"
+                                    title="Rebaixar para Admin"
+                                  >
+                                    <ArrowDownCircle size={16} />
+                                    <span>Rebaixar Admin</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => openConfirmModal(user, "USER")}
+                                    className="text-red-600 hover:text-red-800 flex items-center gap-1 font-medium text-xs"
+                                    title="Rebaixar para User"
+                                  >
+                                    <ArrowDownCircle size={16} />
+                                    <span>Rebaixar User</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -258,27 +301,35 @@ export default function HomeSuperAdmin() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="p-6">
-                <div className={`w-12 h-12 rounded-full mb-4 flex items-center justify-center ${targetPerfil === 'ADMIN' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                   {targetPerfil === 'ADMIN' ? <CheckCircle2 size={24} /> : <ArrowDownCircle size={24} />}
-                </div>
-                <h2 className="text-xl font-bold mb-2">Confirmar alteração</h2>
-                <p className="text-gray-600 mb-6">
-                  Deseja realmente {targetPerfil === 'ADMIN' ? 'promover' : 'rebaixar'} o usuário <strong>{selectedUser.nome}</strong> para o perfil <strong>{targetPerfil}</strong>?
-                </p>
-                <div className="flex justify-end gap-3">
-                  <button 
-                    onClick={() => setShowConfirmModal(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    onClick={handleUpdatePerfil}
-                    className={`px-4 py-2 text-sm font-medium text-white rounded-lg ${targetPerfil === 'ADMIN' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
-                  >
-                    Confirmar
-                  </button>
-                </div>
+                {/* Header dinâmico baseado em promoção ou rebaixamento */}
+                {(() => {
+                  const isPromotion = targetPerfil === 'GESTOR' || (targetPerfil === 'ADMIN' && selectedUser.perfil === 'USER');
+                  return (
+                    <>
+                      <div className={`w-12 h-12 rounded-full mb-4 flex items-center justify-center ${isPromotion ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                         {isPromotion ? <ArrowUpCircle size={24} /> : <ArrowDownCircle size={24} />}
+                      </div>
+                      <h2 className="text-xl font-bold mb-2">Confirmar alteração</h2>
+                      <p className="text-gray-600 mb-6">
+                        Deseja realmente {isPromotion ? 'promover' : 'rebaixar'} o usuário <strong>{selectedUser.nome}</strong> para o perfil <strong>{targetPerfil}</strong>?
+                      </p>
+                      <div className="flex justify-end gap-3">
+                        <button 
+                          onClick={() => setShowConfirmModal(false)}
+                          className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
+                        >
+                          Cancelar
+                        </button>
+                        <button 
+                          onClick={handleUpdatePerfil}
+                          className={`px-4 py-2 text-sm font-medium text-white rounded-lg ${isPromotion ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                        >
+                          Confirmar
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

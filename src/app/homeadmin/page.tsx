@@ -22,6 +22,8 @@ export default function HomeAdmin() {
                 const res = await calcularTotalGeralAction();
                 if (res.success) {
                     setSaldo(Number(res.data.total));
+                } else {
+                    console.error("Erro no action total geral:", res.error);
                 }
             } catch (err) {
                 console.error("Erro ao carregar saldo:", err);
@@ -39,6 +41,8 @@ export default function HomeAdmin() {
                     setDizimo(Number(res.data.dizimo));
                     setOferta(Number(res.data.oferta));
                     setDespesa(Number(res.data.despesa));
+                } else {
+                    console.error("Erro no action totais mensais:", res.error);
                 }
             } catch (err) {
                 console.error("Erro ao carregar totais:", err);

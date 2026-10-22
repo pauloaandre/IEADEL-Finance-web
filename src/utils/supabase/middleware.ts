@@ -58,6 +58,8 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     if (usuario?.perfil === 'SUPER_ADMIN') {
       url.pathname = '/homesuperadmin'
+    } else if (usuario?.perfil === 'GESTOR') {
+      url.pathname = '/homegestor'
     } else if (usuario?.perfil === 'ADMIN') {
       url.pathname = '/homeadmin'
     } else {

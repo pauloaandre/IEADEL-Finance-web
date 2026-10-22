@@ -24,6 +24,7 @@ export const CreateMovimentacaoSchema = z
     tipo: TipoMovimentacaoEnum,
     usuarioId: z.string().uuid('ID do usuário deve ser um UUID válido.').optional().nullable(),
     isVisitante: z.boolean().optional().nullable(),
+    idCongregacaoDestino: z.number().int().positive().nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -60,6 +61,7 @@ export interface MovimentacaoResponse {
   idUsuario: string | null
   nomeUsuario: string | null
   idCongregacao: number
+  idCongregacaoDestino: number | null
   dataRegistro: string | null
 }
 
