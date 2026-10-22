@@ -23,10 +23,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 DROP POLICY IF EXISTS "Users can view and edit their own profile" ON public.usuario;
 
 -- Usuários comuns podem apenas VISUALIZAR seu próprio registro
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.usuario;
 CREATE POLICY "Users can view their own profile" ON public.usuario
   FOR SELECT USING (id_usuario = auth.uid());
 
 -- Usuários comuns podem ATUALIZAR apenas seu próprio registro (DELETE não é permitido para USER)
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.usuario;
 CREATE POLICY "Users can update their own profile" ON public.usuario
   FOR UPDATE 
   USING (id_usuario = auth.uid())
@@ -37,22 +39,22 @@ CREATE POLICY "Users can update their own profile" ON public.usuario
 CREATE OR REPLACE FUNCTION public.check_user_update_privileges()
 RETURNS trigger AS $$
 DECLARE
-  current_role public.perfil_usuario;
+  v_current_role public.perfil_usuario;
 BEGIN
   -- Se executado sem sessão de usuário (service_role / migração direta), permite
   IF auth.uid() IS NULL THEN
     RETURN NEW;
   END IF;
 
-  current_role := public.get_current_user_perfil();
+  v_current_role := public.get_current_user_perfil();
 
   -- SUPER_ADMIN tem permissão irrestrita
-  IF current_role = 'SUPER_ADMIN' THEN
+  IF v_current_role = 'SUPER_ADMIN' THEN
     RETURN NEW;
   END IF;
 
   -- Regras para perfil USER:
-  IF current_role = 'USER' THEN
+  IF v_current_role = 'USER' THEN
     -- Impede autoescalonamento de perfil (ex: tentar virar ADMIN ou SUPER_ADMIN)
     IF NEW.perfil IS DISTINCT FROM OLD.perfil THEN
       RAISE EXCEPTION 'Usuários não têm permissão para alterar seu perfil.';
@@ -70,7 +72,7 @@ BEGIN
   END IF;
 
   -- Regras para perfil ADMIN:
-  IF current_role = 'ADMIN' THEN
+  IF v_current_role = 'ADMIN' THEN
     -- ADMIN não pode promover a si mesmo ou a terceiros para SUPER_ADMIN
     IF NEW.perfil = 'SUPER_ADMIN' AND OLD.perfil IS DISTINCT FROM 'SUPER_ADMIN' THEN
       RAISE EXCEPTION 'Apenas SUPER_ADMIN pode promover usuários a SUPER_ADMIN.';

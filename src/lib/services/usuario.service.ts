@@ -4,6 +4,7 @@ import type {
   UsuarioResponse,
   UpdateUsuarioInput,
   PerfilType,
+  TipoContribuinteType,
 } from '@/lib/validations/usuario'
 
 export class AccessDeniedError extends Error {
@@ -39,6 +40,7 @@ function toUsuarioResponse(usuario: any): UsuarioResponse {
     idCongregacao: usuario.congregacao?.id_congregacao ?? usuario.id_congregacao ?? null,
     nomeCongregacao: usuario.congregacao?.nome ?? null,
     ativo: usuario.ativo ?? null,
+    tipoContribuinte: (usuario.tipo_contribuinte as TipoContribuinteType) ?? 'MEMBRO',
   }
 }
 
@@ -52,8 +54,8 @@ export async function listarUsuarios(logado: SessionUser): Promise<UsuarioRespon
   // SUPER_ADMIN vê todos. ADMIN vê os da sua congregação. USER vê apenas a si mesmo.
   let query = supabase.from('usuario').select('*, congregacao(id_congregacao, nome)').order('nome', { ascending: true })
 
-  // Comportamento herdado: SUPER_ADMIN via apenas usuários ativos.
-  if (logado.perfil === 'SUPER_ADMIN') {
+  // Comportamento herdado: SUPER_ADMIN e GESTOR veem apenas usuários ativos.
+  if (logado.perfil === 'SUPER_ADMIN' || logado.perfil === 'GESTOR') {
     query = query.eq('ativo', true)
   }
 
@@ -154,6 +156,10 @@ export async function atualizarUsuario(
     throw new AccessDeniedError('Usuário comum não pode alterar dados de terceiros.')
   }
 
+  if (logado.perfil === 'GESTOR') {
+    throw new AccessDeniedError('GESTOR tem acesso somente leitura aos dados de usuários.')
+  }
+
   // Verificação de e-mail duplicado
   if (dados.email && dados.email !== existente.email) {
     const { data: outro } = await supabase
@@ -188,6 +194,12 @@ export async function atualizarUsuario(
         throw new AccessDeniedError('ADMIN só pode vincular usuários à sua própria congregação.')
       }
       updateData.id_congregacao = dados.idCongregacao
+    }
+
+    // ADMIN pode alterar tipo_contribuinte de usuários da sua congregação
+    // SUPER_ADMIN pode alterar de qualquer um
+    if (dados.tipoContribuinte !== undefined) {
+      updateData.tipo_contribuinte = dados.tipoContribuinte
     }
   }
 

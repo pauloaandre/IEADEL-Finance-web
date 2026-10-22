@@ -5,25 +5,11 @@ import NavBar from "@/components/navbar";
 import { parseDateLocal } from "@/utils/date";
 import { getSessionUserAction } from "@/actions/auth";
 import { buscarCongregacaoPorIdAction } from "@/actions/congregacoes";
-import { calcularTotaisMensaisAction, listarMovimentacoesAction } from "@/actions/movimentacoes";
-
-interface Movimentacao {
-  id: number;
-  data: string;
-  descricao: string;
-  valor: number;
-  tipo: string;
-  idUsuario: number | null;
-  nomeUsuario: string | null;
-  idCongregacao: number;
-  dataRegistro: string;
-}
-
-interface Totais {
-  dizimo: number;
-  oferta: number;
-  despesa: number;
-}
+import {
+  listarDadosRelatorioAction,
+  type RelatorioMovItem,
+  type RelatorioData,
+} from "@/actions/movimentacoes";
 
 const mesesNomes = [
   "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO",
@@ -33,14 +19,10 @@ const mesesNomes = [
 export default function GerarRelatorio() {
   const [mes, setMes] = useState(new Date().getMonth() + 1);
   const [ano, setAno] = useState(new Date().getFullYear());
-  const [totais, setTotais] = useState<Totais>({ dizimo: 0, oferta: 0, despesa: 0 });
-  const [dizimos, setDizimos] = useState<Movimentacao[]>([]);
-  const [ofertas, setOfertas] = useState<Movimentacao[]>([]);
-  const [despesas, setDespesas] = useState<Movimentacao[]>([]);
   const [loading, setLoading] = useState(false);
   const [nomeCongregacao, setNomeCongregacao] = useState("Carregando...");
-
   const [user, setUser] = useState<any>(null);
+  const [dados, setDados] = useState<RelatorioData | null>(null);
 
   useEffect(() => {
     getSessionUserAction().then(setUser);
@@ -79,44 +61,22 @@ export default function GerarRelatorio() {
   const fetchRelatorioData = async (m: number, a: number) => {
     setLoading(true);
     try {
-      const mesFormatado = String(m).padStart(2, "0");
-      const anoFormatado = String(a);
-
       const params = new URLSearchParams(window.location.search);
       let idCongregacao = params.get("id");
 
       if (!idCongregacao && user?.congregacaoId) {
           idCongregacao = String(user.congregacaoId);
       }
-      
-      const idCongNum = idCongregacao ? Number(idCongregacao) : undefined;
-      
-      // Fetch Totais
-      const resTotais = await calcularTotaisMensaisAction(mesFormatado, anoFormatado, idCongNum);
-      if (resTotais.success) {
-          setTotais({
-              dizimo: Number(resTotais.data.dizimo),
-              oferta: Number(resTotais.data.oferta),
-              despesa: Number(resTotais.data.despesa)
-          });
-      }
 
-      // Fetch Dizimos
-      const resDizimos = await listarMovimentacoesAction("DIZIMO", mesFormatado, anoFormatado, idCongNum);
-      if (resDizimos.success) {
-          setDizimos(resDizimos.data.map((d: any) => ({ ...d, valor: Number(d.valor) })));
-      }
+      const idCongNum = idCongregacao ? Number(idCongregacao) : user?.congregacaoId;
+      if (!idCongNum) return;
 
-      // Fetch Ofertas
-      const resOfertas = await listarMovimentacoesAction("OFERTA", mesFormatado, anoFormatado, idCongNum);
-      if (resOfertas.success) {
-          setOfertas(resOfertas.data.map((d: any) => ({ ...d, valor: Number(d.valor) })));
-      }
+      const mesFormatado = String(m).padStart(2, "0");
+      const anoFormatado = String(a);
 
-      // Fetch Despesas
-      const resDespesas = await listarMovimentacoesAction("DESPESA", mesFormatado, anoFormatado, idCongNum);
-      if (resDespesas.success) {
-          setDespesas(resDespesas.data.map((d: any) => ({ ...d, valor: Number(d.valor) })));
+      const res = await listarDadosRelatorioAction(mesFormatado, anoFormatado, idCongNum);
+      if (res.success) {
+        setDados(res.data);
       }
     } catch (error) {
       console.error("Erro ao carregar dados do relatório:", error);
@@ -131,12 +91,12 @@ export default function GerarRelatorio() {
     }
   }, [mes, ano, user]);
 
+  // Aggregate dizimos by name
   const dizimosProcessados = useMemo(() => {
-    const agrupados = dizimos.reduce((acc, curr) => {
+    if (!dados) return [];
+    const agrupados = dados.dizimosNormais.reduce((acc, curr) => {
       const nome = curr.nomeUsuario || curr.descricao || "NÃO IDENTIFICADO";
-      if (!acc[nome]) {
-        acc[nome] = 0;
-      }
+      if (!acc[nome]) acc[nome] = 0;
       acc[nome] += curr.valor;
       return acc;
     }, {} as Record<string, number>);
@@ -144,8 +104,9 @@ export default function GerarRelatorio() {
     return Object.entries(agrupados)
       .map(([nome, valor], index) => ({ id: index, nome, valor }))
       .sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [dizimos]);
+  }, [dados]);
 
+  // Obreiros logic removed
   const handlePrint = () => {
     window.print();
   };
@@ -157,8 +118,16 @@ export default function GerarRelatorio() {
     });
   };
 
-  const totalEntradas = totais.dizimo + totais.oferta;
-  const saldoGeral = totalEntradas - totais.despesa;
+  // Totals
+  const totalDizimosNormais = dados ? dados.dizimosNormais.reduce((s, d) => s + d.valor, 0) : 0;
+  const totalOfertas = dados ? dados.ofertas.reduce((s, d) => s + d.valor, 0) : 0;
+  const totalDespesas = dados ? dados.despesas.reduce((s, d) => s + d.valor, 0) : 0;
+  const repasse10 = dados?.repasse10 ?? 0;
+  const competenciaFechada = dados?.competenciaFechada ?? false;
+
+  const totalEntradas = totalDizimosNormais + totalOfertas;
+  const totalSaidas = totalDespesas + (competenciaFechada ? repasse10 : 0);
+  const saldoGeral = totalEntradas - totalSaidas;
 
   return (
     <>
@@ -222,7 +191,6 @@ export default function GerarRelatorio() {
               padding: 5vw !important;
               margin: 10px auto !important;
             }
-            /* Ajuste de escala para textos no mobile */
             h1, h2 { font-size: 3.5vw !important; }
             h3 { font-size: 3vw !important; }
             th { font-size: 2.5vw !important; padding: 1.5vw !important; }
@@ -349,6 +317,17 @@ export default function GerarRelatorio() {
             margin-top: 20px;
           }
 
+          .obreiro-note {
+            border: 1px dashed #999;
+            padding: 6px 10px;
+            font-size: 9pt;
+            font-style: italic;
+            text-align: center;
+            color: #666;
+            margin-top: -10px;
+            margin-bottom: 20px;
+          }
+
           .box {
             margin-top: 50px;
             border: 1px solid #000000;
@@ -374,10 +353,10 @@ export default function GerarRelatorio() {
           }
         ` }} />
 
-        {/* PAGE 1: RECEITA */}
+        {/* PAGE 1: RESUMO */}
         <div className="page">
           <h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS {nomeCongregacao}</h1>
-          <h3>RECEITA MÊS: {mesesNomes[mes - 1]} {ano}</h3>
+          <h3>RELATÓRIO FINANCEIRO — {mesesNomes[mes - 1]} {ano}</h3>
 
           <table>
             <thead>
@@ -388,20 +367,30 @@ export default function GerarRelatorio() {
             </thead>
             <tbody>
               <tr>
-                <td className="bold">1 &nbsp;&nbsp;&nbsp;&nbsp; TOTAL ENTRADA DÍZIMOS</td>
-                <td className="right bold">{formatCurrency(totais.dizimo)}</td>
+                <td className="bold">1 &nbsp;&nbsp;&nbsp;&nbsp; TOTAL DÍZIMOS NORMAIS</td>
+                <td className="right bold">{formatCurrency(totalDizimosNormais)}</td>
               </tr>
               <tr>
-                <td className="bold">2 &nbsp;&nbsp;&nbsp;&nbsp; TOTAL ENTRADA OFERTAS</td>
-                <td className="right bold">{formatCurrency(totais.oferta)}</td>
+                <td className="bold">2 &nbsp;&nbsp;&nbsp;&nbsp; TOTAL OFERTAS</td>
+                <td className="right bold">{formatCurrency(totalOfertas)}</td>
               </tr>
               <tr>
                 <td className="bold">3 &nbsp;&nbsp;&nbsp;&nbsp; TOTAL ENTRADAS (1 + 2)</td>
                 <td className="right bold">{formatCurrency(totalEntradas)}</td>
               </tr>
               <tr>
-                <td className="bold">4 &nbsp;&nbsp;&nbsp;&nbsp; TOTAL SAÍDAS</td>
-                <td className="right bold">{formatCurrency(totais.despesa)}</td>
+                <td className="bold">4 &nbsp;&nbsp;&nbsp;&nbsp; TOTAL DESPESAS</td>
+                <td className="right bold">{formatCurrency(totalDespesas)}</td>
+              </tr>
+              {competenciaFechada && repasse10 > 0 && (
+                <tr>
+                  <td className="bold">5 &nbsp;&nbsp;&nbsp;&nbsp; REPASSE DE 10% À MATRIZ</td>
+                  <td className="right bold">{formatCurrency(repasse10)}</td>
+                </tr>
+              )}
+              <tr>
+                <td className="bold">{competenciaFechada && repasse10 > 0 ? "6" : "5"} &nbsp;&nbsp;&nbsp;&nbsp; TOTAL SAÍDAS ({competenciaFechada && repasse10 > 0 ? "4 + 5" : "4"})</td>
+                <td className="right bold">{formatCurrency(totalSaidas)}</td>
               </tr>
               <tr>
                 <td>&nbsp;</td>
@@ -411,7 +400,7 @@ export default function GerarRelatorio() {
           </table>
 
           <div className="saldo-geral-box">
-            <span>TOTAL ARRECADADO (3 - 4)</span>
+            <span>SALDO DA CONGREGAÇÃO (3 - {competenciaFechada && repasse10 > 0 ? "6" : "5"})</span>
             <span>{formatCurrency(saldoGeral)}</span>
           </div>
 
@@ -424,26 +413,11 @@ export default function GerarRelatorio() {
             <h3>Conselho fiscal assinaturas</h3>
             <table>
               <tbody>
-                <tr>
-                  <td style={{ width: "10%" }}>1</td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <td>2</td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <td>3</td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <td>4</td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <td>5</td>
-                  <td></td>
-                </tr>
+                <tr><td style={{ width: "10%" }}>1</td><td></td></tr>
+                <tr><td>2</td><td></td></tr>
+                <tr><td>3</td><td></td></tr>
+                <tr><td>4</td><td></td></tr>
+                <tr><td>5</td><td></td></tr>
               </tbody>
             </table>
             <div className="footer-date">
@@ -452,7 +426,7 @@ export default function GerarRelatorio() {
           </div>
         </div>
 
-        {/* PAGE 2: DIZIMOS */}
+        {/* PAGE 2: DÍZIMOS */}
         <div className="page">
           <h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS {nomeCongregacao}</h1>
           <h3>DÍZIMOS - MÊS: {mesesNomes[mes - 1]} {ano}</h3>
@@ -473,7 +447,6 @@ export default function GerarRelatorio() {
                   <td className="right">{formatCurrency(item.valor)}</td>
                 </tr>
               ))}
-              {/* Fill with empty rows to reach at least 15 or so, or just let it be dynamic */}
               {dizimosProcessados.length === 0 && (
                 <tr>
                   <td colSpan={3} className="centered italic py-4 text-gray-400">Nenhum dízimo registrado neste mês.</td>
@@ -481,7 +454,7 @@ export default function GerarRelatorio() {
               )}
               <tr className="total-row">
                 <td colSpan={2} className="right">TOTAL</td>
-                <td className="right">R$ {formatCurrency(totais.dizimo)}</td>
+                <td className="right">R$ {formatCurrency(totalDizimosNormais)}</td>
               </tr>
             </tbody>
           </table>
@@ -502,7 +475,7 @@ export default function GerarRelatorio() {
               </tr>
             </thead>
             <tbody>
-              {ofertas.map((item, index) => (
+              {(dados?.ofertas ?? []).map((item, index) => (
                 <tr key={item.id}>
                   <td className="centered">{index + 1}</td>
                   <td>{item.descricao}</td>
@@ -510,21 +483,21 @@ export default function GerarRelatorio() {
                   <td></td>
                 </tr>
               ))}
-              {ofertas.length === 0 && (
+              {(dados?.ofertas ?? []).length === 0 && (
                 <tr>
                   <td colSpan={4} className="centered italic py-4 text-gray-400">Nenhuma oferta registrada neste mês.</td>
                 </tr>
               )}
               <tr className="total-row">
                 <td colSpan={2} className="right">TOTAL</td>
-                <td className="right">R$ {formatCurrency(totais.oferta)}</td>
+                <td className="right">R$ {formatCurrency(totalOfertas)}</td>
                 <td></td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* PAGE 4: SAÍDAS */}
+        {/* PAGE 5: SAÍDAS */}
         <div className="page">
           <h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS {nomeCongregacao}</h1>
           <h3>SAÍDAS MÊS: {mesesNomes[mes - 1]} {ano}</h3>
@@ -539,7 +512,7 @@ export default function GerarRelatorio() {
               </tr>
             </thead>
             <tbody>
-              {despesas.map((item, index) => (
+              {(dados?.despesas ?? []).map((item, index) => (
                 <tr key={item.id}>
                   <td className="centered">{index + 1}</td>
                   <td>{item.descricao}</td>
@@ -547,14 +520,21 @@ export default function GerarRelatorio() {
                   <td className="right">{formatCurrency(item.valor)}</td>
                 </tr>
               ))}
-              {despesas.length === 0 && (
+              {(dados?.despesas ?? []).length === 0 && (
                 <tr>
                   <td colSpan={4} className="centered italic py-4 text-gray-400">Nenhuma saída registrada neste mês.</td>
                 </tr>
               )}
+
+              {competenciaFechada && repasse10 > 0 && (
+                <tr>
+                  <td colSpan={3} className="total-row centered" style={{ backgroundColor: "#1a4d8f", color: "white" }}>REPASSE DE 10% À MATRIZ</td>
+                  <td className="total-row right" style={{ backgroundColor: "#e8f0fe" }}>{formatCurrency(repasse10)}</td>
+                </tr>
+              )}
               <tr>
-                <td colSpan={3}className="total-row centered" style={{ backgroundColor: "#333", color: "white" }}>TOTAL SAÍDA</td>
-                <td className="total-row right" style={{ backgroundColor: "#f2f2f2" }}>{formatCurrency(totais.despesa)}</td>
+                <td colSpan={3} className="total-row centered" style={{ backgroundColor: "#333", color: "white" }}>TOTAL SAÍDAS</td>
+                <td className="total-row right" style={{ backgroundColor: "#f2f2f2" }}>{formatCurrency(totalSaidas)}</td>
               </tr>
             </tbody>
           </table>

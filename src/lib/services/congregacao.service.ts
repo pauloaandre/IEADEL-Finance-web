@@ -30,12 +30,14 @@ function toCongregacaoResponse(
  * Lista todas as congregações.
  */
 export async function listarCongregacoes(
-  isSuperAdmin: boolean
+  isSuperAdmin: boolean,
+  isGestor: boolean = false
 ): Promise<CongregacaoResponse[]> {
   const supabase = await createClient()
+  const hasFullAccess = isSuperAdmin || isGestor
 
   let query = supabase.from('congregacao').select(
-    isSuperAdmin ? '*, usuario(nome, ativo)' : '*'
+    hasFullAccess ? '*, usuario(nome, ativo)' : '*'
   ).order('id_congregacao', { ascending: true })
 
   const { data, error } = await query
@@ -45,7 +47,7 @@ export async function listarCongregacoes(
     throw new Error('Falha ao listar congregações')
   }
 
-  return (data || []).map((c) => toCongregacaoResponse(c, isSuperAdmin))
+  return (data || []).map((c) => toCongregacaoResponse(c, hasFullAccess))
 }
 
 /**
@@ -53,13 +55,15 @@ export async function listarCongregacoes(
  */
 export async function buscarCongregacaoPorId(
   id: number,
-  isSuperAdmin: boolean
+  isSuperAdmin: boolean,
+  isGestor: boolean = false
 ): Promise<CongregacaoResponse | null> {
   const supabase = await createClient()
+  const hasFullAccess = isSuperAdmin || isGestor
 
   let query = supabase
     .from('congregacao')
-    .select(isSuperAdmin ? '*, usuario(nome, ativo)' : '*')
+    .select(hasFullAccess ? '*, usuario(nome, ativo)' : '*')
     .eq('id_congregacao', id)
     .single()
 
@@ -67,7 +71,7 @@ export async function buscarCongregacaoPorId(
 
   if (error) return null
 
-  return toCongregacaoResponse(data, isSuperAdmin)
+  return toCongregacaoResponse(data, hasFullAccess)
 }
 
 /**

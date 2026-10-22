@@ -1,7 +1,10 @@
 import { z } from 'zod'
 
-export const PerfilEnum = z.enum(['USER', 'ADMIN', 'SUPER_ADMIN'])
+export const PerfilEnum = z.enum(['USER', 'ADMIN', 'GESTOR', 'SUPER_ADMIN'])
 export type PerfilType = z.infer<typeof PerfilEnum>
+
+export const TipoContribuinteEnum = z.enum(['MEMBRO', 'OBREIRO'])
+export type TipoContribuinteType = z.infer<typeof TipoContribuinteEnum>
 
 export const UpdateUsuarioSchema = z.object({
   nome: z
@@ -24,6 +27,7 @@ export const UpdateUsuarioSchema = z.object({
   perfil: PerfilEnum.optional(),
   ativo: z.boolean().optional(),
   idCongregacao: z.number().int().positive().nullable().optional(),
+  tipoContribuinte: TipoContribuinteEnum.optional(),
 })
 
 export type UpdateUsuarioInput = z.infer<typeof UpdateUsuarioSchema>
@@ -36,4 +40,6 @@ export interface UsuarioResponse {
   idCongregacao: number | null
   nomeCongregacao: string | null
   ativo?: boolean | null
+  tipoContribuinte?: TipoContribuinteType | null
 }
+

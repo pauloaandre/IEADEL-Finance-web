@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireAuth } from '@/lib/session'
 import { createClient } from '@/utils/supabase/server'
-import { PerfilEnum, type PerfilType, type UsuarioResponse } from '@/lib/validations/usuario'
+import { PerfilEnum, type PerfilType, type UsuarioResponse, type TipoContribuinteType } from '@/lib/validations/usuario'
 
 export type ActionResult<T> =
   | { success: true; data: T }
@@ -50,6 +50,7 @@ export async function listarTodosUsuariosAction(): Promise<ActionResult<UsuarioR
       idCongregacao: u.congregacao?.id_congregacao ?? u.id_congregacao ?? null,
       nomeCongregacao: u.congregacao?.nome ?? null,
       ativo: u.ativo,
+      tipoContribuinte: (u.tipo_contribuinte as TipoContribuinteType) ?? 'MEMBRO',
     }))
 
     return { success: true, data }
@@ -112,6 +113,7 @@ export async function mudarPerfilAction(
         idCongregacao: atualizado.congregacao?.id_congregacao ?? atualizado.id_congregacao ?? null,
         nomeCongregacao: atualizado.congregacao?.nome ?? null,
         ativo: atualizado.ativo,
+        tipoContribuinte: (atualizado.tipo_contribuinte as TipoContribuinteType) ?? 'MEMBRO',
       },
     }
   } catch (error) {
@@ -164,6 +166,7 @@ export async function mudarCongregacaoAction(
         idCongregacao: atualizado.congregacao?.id_congregacao ?? atualizado.id_congregacao ?? null,
         nomeCongregacao: atualizado.congregacao?.nome ?? null,
         ativo: atualizado.ativo,
+        tipoContribuinte: (atualizado.tipo_contribuinte as TipoContribuinteType) ?? 'MEMBRO',
       },
     }
   } catch (error) {

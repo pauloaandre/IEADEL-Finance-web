@@ -70,8 +70,9 @@ export async function listarCongregacoesAction(): Promise<
   try {
     const user = await getSessionUser()
     const isSuperAdmin = user?.perfil === 'SUPER_ADMIN'
+    const isGestor = user?.perfil === 'GESTOR'
 
-    const lista = await listarCongregacoes(isSuperAdmin)
+    const lista = await listarCongregacoes(isSuperAdmin, isGestor)
     return { success: true, data: lista }
   } catch (error) {
     console.error('Erro na action listarCongregacoesAction:', error)
@@ -95,7 +96,8 @@ export async function buscarCongregacaoPorIdAction(
     }
 
     const isSuperAdmin = user.perfil === 'SUPER_ADMIN'
-    const congregacao = await buscarCongregacaoPorId(id, isSuperAdmin)
+    const isGestor = user.perfil === 'GESTOR'
+    const congregacao = await buscarCongregacaoPorId(id, isSuperAdmin, isGestor)
 
     if (!congregacao) {
       return { success: false, error: 'Congregação não encontrada.' }
